@@ -1,8 +1,8 @@
 {
     "manifest_version": 2,
-    "name": "ThunderAI",
+    "name": "ThunderAI (Side Panel)",
     "description": "__MSG_extensionDescription__",
-    "version": "5.0.1",
+    "version": "5.0.1.1",
     "author": "Mic (m@micz.it)",
     "homepage_url": "https://micz.it/thunderbird-addon-thunderai/",
     "browser_specific_settings": {
@@ -46,6 +46,16 @@
         "http://*/*",
         "<all_urls>"
     ],
+    "experiment_apis": {
+        "chatPanel": {
+            "schema": "experiments/chatPanel/schema.json",
+            "parent": {
+                "scopes": ["addon_parent"],
+                "paths": [["chatPanel"]],
+                "script": "experiments/chatPanel/parent.js"
+            }
+        }
+    },
     "background": {
         "page": "mzta-background.html"
     },

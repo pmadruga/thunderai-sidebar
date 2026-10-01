@@ -23,6 +23,9 @@
 import { buildSendIcon, buildStopIcon, buildCheckIcon, buildAlertIcon } from './svgIcons.js';
 import { SHARED_BASE_CSS } from './sharedStyles.js';
 
+// Set when the chat runs in the ThunderAI side panel (see experiments/chatPanel)
+const mztaInPanel = new URLSearchParams(window.location.search).get('panel') === '1';
+
 const messageInputTemplate = document.createElement('template');
 
 const messagesInputStyle  = document.createElement('style');
@@ -615,7 +618,7 @@ class MessageInput extends HTMLElement {
             args.customLoading.style.display = 'inline-block';
             
             let tab = await browser.tabs.query({ active: true, currentWindow: true });
-            browser.runtime.sendMessage({ command: "api_send_custom_text", custom_text: this._customTextArray, tabId: tab[0].id });
+            browser.runtime.sendMessage({ command: "api_send_custom_text", custom_text: this._customTextArray, tabId: tab[0].id, panel: mztaInPanel });
             args.customDiv.style.display = 'none';
             
             args.customBtn.disabled = false;

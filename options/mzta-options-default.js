@@ -109,6 +109,7 @@ export const prefs_default = {
     chatgpt_win_top: '',
     chatgpt_win_left: '',
     chatgpt_win_save_position: false,
+    chat_in_side_panel: true,
     default_chatgpt_lang: '',
     default_sign_name: '',
     reply_type: 'reply_all',

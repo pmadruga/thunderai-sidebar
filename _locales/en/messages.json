@@ -2793,6 +2793,14 @@
     "message": "Left",
     "description": ""
   },
+  "prefs_chat_in_side_panel": {
+    "message": "Open the AI chat in a side panel",
+    "description": ""
+  },
+  "prefs_chat_in_side_panel_info": {
+    "message": "Show the chat on the right side of the main window instead of a separate window. ChatGPT Web, and chats started from a compose or standalone message window, still open in a window.",
+    "description": ""
+  },
   "prefs_chatgpt_win_save_position": {
     "message": "Automatically save the window position when using the close button.",
     "description": ""

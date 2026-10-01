@@ -1,0 +1,25 @@
+[
+  {
+    "namespace": "chatPanel",
+    "description": "Docks the ThunderAI chat page in a resizable panel on the right side of a Thunderbird main window.",
+    "functions": [
+      {
+        "name": "open",
+        "type": "function",
+        "async": true,
+        "description": "Opens (or reuses) the side panel in the given window and loads the URL. Resolves to false when the window can't host a panel (e.g. compose or standalone message windows).",
+        "parameters": [
+          { "name": "windowId", "type": "integer", "minimum": 0 },
+          { "name": "url", "type": "string" }
+        ]
+      },
+      {
+        "name": "close",
+        "type": "function",
+        "async": true,
+        "description": "Closes the side panel in every window.",
+        "parameters": []
+      }
+    ]
+  }
+]

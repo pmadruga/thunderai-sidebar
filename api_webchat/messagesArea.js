@@ -31,6 +31,10 @@ import {
     buildSparkleIcon, buildCopyIcon, buildCheckIcon, buildDiffIcon,
     buildSaveIcon, buildUseAnswerIcon, buildScrollToBottomIcon,
 } from './svgIcons.js';
+
+// Set when the chat runs in the ThunderAI side panel (see experiments/chatPanel)
+const mztaInPanel = new URLSearchParams(window.location.search).get('panel') === '1';
+
 const messagesAreaTemplate = document.createElement('template');
 
 const messagesAreaStyle = document.createElement('style');
@@ -1106,13 +1110,13 @@ class MessagesArea extends HTMLElement {
                     // context before the query can resolve. Swallow the expected
                     // "Actor 'Conduits' destroyed" rejection instead of leaving it
                     // as an unhandled promise rejection.
-                    browser.runtime.sendMessage({command: "chatgpt_close", window_id: (await browser.windows.getCurrent()).id}).catch(() => {});
+                    browser.runtime.sendMessage({command: "chatgpt_close", window_id: (await browser.windows.getCurrent()).id, panel: mztaInPanel}).catch(() => {});
                     break;
                 case "2":     // replace text
                     //  console.log("[ThunderAI] (replace text) fullTextHTMLAtAssignment: " + fullTextHTMLAtAssignment);
                     await browser.runtime.sendMessage({command: "chatgpt_replaceSelectedText", text: finalText, tabId: promptData.tabId, mailMessageId: promptData.mailMessageId});
                     // Fire-and-forget: see the note above in the reply case.
-                    browser.runtime.sendMessage({command: "chatgpt_close", window_id: (await browser.windows.getCurrent()).id}).catch(() => {});
+                    browser.runtime.sendMessage({command: "chatgpt_close", window_id: (await browser.windows.getCurrent()).id, panel: mztaInPanel}).catch(() => {});
                     break;
             }
         }
@@ -1161,7 +1165,7 @@ class MessagesArea extends HTMLElement {
         closeButton.textContent = browser.i18n.getMessage("chatgpt_win_close");
         closeButton.classList.add('close_btn', 'mzta-btn-tertiary');
         closeButton.addEventListener('click', async () => {
-            browser.runtime.sendMessage({command: "chatgpt_close", window_id: (await browser.windows.getCurrent()).id}).catch(() => {});    // close window
+            browser.runtime.sendMessage({command: "chatgpt_close", window_id: (await browser.windows.getCurrent()).id, panel: mztaInPanel}).catch(() => {});    // close window
         });
         if(promptData.action != "0") {
             actionButtons.appendChild(splitButton);
@@ -1384,7 +1388,7 @@ class MessagesArea extends HTMLElement {
                 headerMessageId: promptData.prompt_info.headerMessageId,
                 tabId: promptData.prompt_info.summaryTabId || promptData.tabId,
             });
-            browser.runtime.sendMessage({command: "chatgpt_close", window_id: (await browser.windows.getCurrent()).id}).catch(() => {});
+            browser.runtime.sendMessage({command: "chatgpt_close", window_id: (await browser.windows.getCurrent()).id, panel: mztaInPanel}).catch(() => {});
         });
         return saveSummaryButton;
     }

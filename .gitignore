@@ -28,3 +28,5 @@ coverage
 dist
 
 .claude
+# ThunderAI (Side Panel) build output
+dist/
