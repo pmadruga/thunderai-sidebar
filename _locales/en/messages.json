@@ -2793,6 +2793,42 @@
     "message": "Left",
     "description": ""
   },
+  "prompt_chat_email": {
+    "message": "Chat about this email",
+    "description": "Popup menu entry that opens the chat with the selected email(s) as context, without sending a prompt."
+  },
+  "chat_email_context_intro": {
+    "message": "The following email conversation is the context for this chat. Answer my questions about it. Reply in the language I write in, and keep answers concise unless I ask for detail.",
+    "description": ""
+  },
+  "chat_email_question_label": {
+    "message": "My question:",
+    "description": ""
+  },
+  "chat_email_notice_one": {
+    "message": "Chatting about <b>$1</b>. Ask anything about this email.",
+    "description": "$1 is the email subject (already HTML-escaped)."
+  },
+  "chat_email_notice_many": {
+    "message": "Chatting about <b>$1</b> ($2 emails). Ask anything about this conversation.",
+    "description": "$1 is the subject (already HTML-escaped), $2 the number of emails."
+  },
+  "chat_email_placeholder": {
+    "message": "Ask about this email…",
+    "description": ""
+  },
+  "chat_email_no_subject": {
+    "message": "(no subject)",
+    "description": ""
+  },
+  "chat_email_no_message": {
+    "message": "Select an email to chat about it.",
+    "description": ""
+  },
+  "chat_panel_close": {
+    "message": "Close",
+    "description": "Tooltip of the close button in the chat side panel."
+  },
   "prefs_chat_in_side_panel": {
     "message": "Open the AI chat in a side panel",
     "description": ""

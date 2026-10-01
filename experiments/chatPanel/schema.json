@@ -9,8 +9,15 @@
         "async": true,
         "description": "Opens (or reuses) the side panel in the given window and loads the URL. Resolves to false when the window can't host a panel (e.g. compose or standalone message windows).",
         "parameters": [
-          { "name": "windowId", "type": "integer", "minimum": 0 },
-          { "name": "url", "type": "string" }
+          {
+            "name": "windowId",
+            "type": "integer",
+            "minimum": 0
+          },
+          {
+            "name": "url",
+            "type": "string"
+          }
         ]
       },
       {
@@ -19,6 +26,19 @@
         "async": true,
         "description": "Closes the side panel in every window.",
         "parameters": []
+      },
+      {
+        "name": "getTheme",
+        "type": "function",
+        "async": true,
+        "description": "Returns the active Thunderbird theme's resolved colours and font, so the chat page can match it. Null if the window can't be read.",
+        "parameters": [
+          {
+            "name": "windowId",
+            "type": "integer",
+            "minimum": 0
+          }
+        ]
       }
     ]
   }

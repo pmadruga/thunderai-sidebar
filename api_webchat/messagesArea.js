@@ -1188,7 +1188,8 @@ class MessagesArea extends HTMLElement {
             actionButtons.appendChild(diffvButton);
         }
 
-        actionButtons.appendChild(closeButton);
+        // The side panel has its own close button in the header.
+        if (!mztaInPanel) actionButtons.appendChild(closeButton);
         turnBody.appendChild(actionButtons);
         turnBody.appendChild(selectionInfo);
         this._lastFullBarTurn = turn;

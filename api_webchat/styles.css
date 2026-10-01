@@ -261,3 +261,92 @@ h1, h2, h3, h4, h5, h6 {
 p {
     margin: 0 0 10px 0;
 }
+
+/* ===========================================================================
+   SIDE PANEL (ThunderAI Side Panel fork)
+   In the side panel the colour tokens come from the active Thunderbird theme
+   (panel-theme.js). The chrome is kept minimal: a slim header with the topic
+   and a close button, no provider pill, quiet info notes.
+   =========================================================================== */
+:root.in-panel body {
+    opacity: 0;
+}
+
+:root.in-panel.theme-ready body {
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    :root.in-panel.theme-ready body {
+        transition: opacity 120ms ease;
+    }
+}
+
+:root.in-panel {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+}
+
+:root.in-panel body,
+:root.in-panel #appContainer {
+    background: var(--bg);
+}
+
+:root.in-panel #appHeader {
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 8px 8px 16px;
+    gap: 8px;
+}
+
+:root.in-panel #appHeaderLogo,
+:root.in-panel #appHeaderApi {
+    display: none !important;
+}
+
+:root.in-panel #appHeaderBrand {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+:root.in-panel #appHeaderName {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Model chip: inline and quiet instead of centred */
+:root.in-panel #appHeaderModel {
+    position: static;
+    transform: none;
+    max-width: 40%;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--ink-3);
+    font-weight: 500;
+}
+
+#appHeaderClose {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--ink-2);
+    font: inherit;
+    font-size: .875rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+#appHeaderClose:hover {
+    background: var(--hover);
+    color: var(--ink);
+}
+
+#appHeaderClose:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}

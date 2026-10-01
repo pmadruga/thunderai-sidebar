@@ -26,6 +26,9 @@ import { getAPIsInitMessageString, convertNewlinesToBr } from '../js/mzta-utils.
 import { loadPrompt } from '../js/mzta-prompts.js';
 import { buildChatBubbleIcon } from './svgIcons.js';
 
+// Set when the chat runs in the ThunderAI side panel (see experiments/chatPanel)
+const mztaInPanel = new URLSearchParams(window.location.search).get('panel') === '1';
+
 // Get the LLM to be used
 const urlParams = new URLSearchParams(window.location.search);
 const llm = urlParams.get('llm');
@@ -187,6 +190,10 @@ if (worker) {
         const model_label = prefs_api[`${integration_prefix}_model`] || llmName;
         const prompt_label = decodeURIComponent(prompt_name ?? '').trim();
         modelChip.textContent = prompt_label ? `${prompt_label} | ${model_label}` : model_label;
+        if (mztaInPanel) {
+            // Side panel: just the model's short name (no path, no .gguf).
+            modelChip.textContent = String(model_label).split(/[\\/]/).pop().replace(/\.gguf$/i, '');
+        }
         modelChip.title = modelChip.textContent;
 
         document.title += " [" + llmName + " | " + decodeURIComponent(prompt_name) + "]";
@@ -278,7 +285,7 @@ if (worker) {
         additional_text_elements.push({label: browser.i18n.getMessage("prompt_string"), value: '[' + prompt_id + '] ' + decodeURIComponent(prompt_name)});
         additional_text_elements.push(...getAdditionalMessages(integration, prefs_api));
 
-        messagesArea.appendUserMessage(getAPIsInitMessageString({
+        if (!mztaInPanel) messagesArea.appendUserMessage(getAPIsInitMessageString({
             api_string: api_strings[integration],
             model_string: prefs_api[`${integration_prefix}_model`],
             host_string: prefs_api[`${integration_prefix}_host`],
@@ -329,6 +336,26 @@ worker.onmessage = async function(event) {
 // handling commands from the backgound page
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     switch (message.command) {
+        case "api_context": {
+            // Chat about an email: nothing is sent yet. The emails ride along
+            // with the user's first message (messageInput.setPendingContext).
+            promptData = message;
+            const info = message.prompt_info || {};
+            const subject = info.chat_subject || browser.i18n.getMessage('chat_email_no_subject');
+            const count = Number(info.chat_count) || 1;
+            if (mztaInPanel) {
+                const title = document.getElementById('appHeaderName');
+                title.textContent = subject;
+                title.title = subject;
+            }
+            const escape = (text) => String(text).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            const notice = count > 1
+                ? browser.i18n.getMessage('chat_email_notice_many', [escape(subject), String(count)])
+                : browser.i18n.getMessage('chat_email_notice_one', [escape(subject)]);
+            messagesArea.appendUserMessage(notice, "info");
+            messageInput.setPendingContext(message.prompt);
+            break;
+        }
         case "api_send":
             promptData = message;
             //send the received prompt to the llm api

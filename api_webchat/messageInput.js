@@ -559,7 +559,21 @@ class MessageInput extends HTMLElement {
             this.messagesAreaComponent.appendUserMessage(messageContent);
         }
         this.showWaitingStatus();
-        this.worker.postMessage({ type: 'chatMessage', message: messageContent });
+        let workerContent = messageContent;
+        if (this._pendingContext) {
+            // First message of an email chat: send the emails along with it.
+            // Only the user's own words are shown in the conversation.
+            workerContent = this._pendingContext + "\n\n" + browser.i18n.getMessage('chat_email_question_label') + "\n" + messageContent;
+            this._pendingContext = null;
+        }
+        this.worker.postMessage({ type: 'chatMessage', message: workerContent });
+    }
+
+    // Chat about an email: keep the emails as context for the first message.
+    setPendingContext(context) {
+        this._pendingContext = context;
+        this._messageInputField.placeholder = browser.i18n.getMessage('chat_email_placeholder');
+        this._messageInputField.focus();
     }
 
     _setMessageInputValue(msg) {

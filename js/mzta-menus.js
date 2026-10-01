@@ -682,17 +682,34 @@ export class mzta_Menus {
             return (showIn === "context" || showIn === "both") && (String(p.type) === "0" || String(p.type) === "1");
         });
 
-        if (contextPrompts.length === 0) {
-            this.logger.log("No prompts for context menu");
-            return;
-        }
-
-        // Create parent menu
+        // Create parent menu. It always exists now: "Chat about this email"
+        // (ThunderAI Side Panel fork) is its first entry even with no prompts.
         await new Promise(resolve =>
             browser.menus.create({
                 id: 'mzta-context-parent',
                 title: 'ThunderAI',
                 contexts: ["message_list"],
+            }, resolve)
+        );
+        await new Promise(resolve =>
+            browser.menus.create({
+                id: 'mzta-ctx-prompt_chat_email',
+                title: browser.i18n.getMessage('prompt_chat_email'),
+                contexts: ["message_list"],
+                parentId: 'mzta-context-parent',
+                icons: 'images/context_menu/custom/love-letter.png',
+            }, resolve)
+        );
+        if (contextPrompts.length === 0) {
+            this.logger.log("No prompts for context menu");
+            return;
+        }
+        await new Promise(resolve =>
+            browser.menus.create({
+                id: 'mzta-ctx-separator-chat',
+                type: 'separator',
+                contexts: ["message_list"],
+                parentId: 'mzta-context-parent',
             }, resolve)
         );
 

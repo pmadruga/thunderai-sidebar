@@ -207,6 +207,7 @@ export function preparePopupMenu(tab) {
         case "mail":
         case "messageDisplay":
             output.lastShortcutFiltering = 1;
+            output.lastShortcutPromptsData = [chatAboutEmailMenuItem(), ...output.lastShortcutPromptsData];
             break;
         case "messageCompose":
             output.lastShortcutFiltering = 2;
@@ -752,6 +753,9 @@ messenger.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 break;
             case 'shortcut_do_prompt':
                 taLog.log("Executing shortcut, promptId: " + message.promptId);
+                if (message.promptId === CHAT_EMAIL_PROMPT_ID) {
+                    return openEmailChat(message.tabId);
+                }
                 if (message.promptId !== 'prompt_add_tags' && specialContextMenuActions[message.promptId]) {    //TODO Add an option here if you want the user to decide to use the autotagging also in the popup menu
                     async function _shortcut_special() {
                         let tabId = message.tabId;
@@ -1606,7 +1610,7 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
                         return;
                     }
                     //console.log(">>>>>>>>>> sender: " + JSON.stringify(sender));
-                    sendToChat(createdTab, { command: "api_send", prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId2, do_custom_text: do_custom_text, prompt_info: prompt_info});
+                    sendToChat(createdTab, { command: (prompt_info?.chat_mode ? "api_context" : "api_send"), prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId2, do_custom_text: do_custom_text, prompt_info: prompt_info});
                     taLog.log('[OpenAI ChatGPT] Connection succeded!');
                     browser.runtime.onMessage.removeListener(listener2);
                 }
@@ -1652,7 +1656,7 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
                         return;
                     }
                     //console.log(">>>>>>>>>> sender: " + JSON.stringify(sender));
-                    sendToChat(createdTab, { command: "api_send", prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId5, do_custom_text: do_custom_text, prompt_info: prompt_info});
+                    sendToChat(createdTab, { command: (prompt_info?.chat_mode ? "api_context" : "api_send"), prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId5, do_custom_text: do_custom_text, prompt_info: prompt_info});
                     taLog.log('[Google Gemini] Connection succeded!');
                     browser.runtime.onMessage.removeListener(listener5);
                 }
@@ -1704,7 +1708,7 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
                         sendToChat(createdTab3, { command: "api_error", error: browser.i18n.getMessage('ollama_empty_model')});
                         return;
                     }
-                    sendToChat(createdTab3, { command: "api_send", prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId3, do_custom_text: do_custom_text, prompt_info: prompt_info});
+                    sendToChat(createdTab3, { command: (prompt_info?.chat_mode ? "api_context" : "api_send"), prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId3, do_custom_text: do_custom_text, prompt_info: prompt_info});
                     taLog.log('[Ollama API] Connection succeded!');
                     browser.runtime.onMessage.removeListener(listener3);
                 }
@@ -1753,7 +1757,7 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
                         return;
                     }
     
-                    sendToChat(createdTab, { command: "api_send", prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId4, do_custom_text: do_custom_text, prompt_info: prompt_info});
+                    sendToChat(createdTab, { command: (prompt_info?.chat_mode ? "api_context" : "api_send"), prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId4, do_custom_text: do_custom_text, prompt_info: prompt_info});
                     taLog.log('[OpenAI Comp API] Connection succeded!');
                     browser.runtime.onMessage.removeListener(listener4);
                 }
@@ -1803,7 +1807,7 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
                         return;
                     }
                     //console.log(">>>>>>>>>> sender: " + JSON.stringify(sender));
-                    sendToChat(createdTab, { command: "api_send", prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId6, do_custom_text: do_custom_text, prompt_info: prompt_info});
+                    sendToChat(createdTab, { command: (prompt_info?.chat_mode ? "api_context" : "api_send"), prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId6, do_custom_text: do_custom_text, prompt_info: prompt_info});
                     taLog.log('[OpenAI ChatGPT] Connection succeded!');
                     browser.runtime.onMessage.removeListener(listener6);
                 }
@@ -1839,6 +1843,100 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
             }
         break;
     }
+}
+
+// ── Chat about this email (ThunderAI Side Panel fork) ────────────────────
+// Opens the chat with the selected email(s) as context and sends nothing:
+// the context rides along with the user's first message (see api_webchat
+// messageInput.setPendingContext). A collapsed conversation or a multi-message
+// selection is shown as several displayed messages, so the whole set is used.
+
+const CHAT_EMAIL_PROMPT_ID = 'prompt_chat_email';
+const CHAT_EMAIL_MAX_MESSAGES = 30;
+
+function chatAboutEmailMenuItem() {
+    return {
+        id: CHAT_EMAIL_PROMPT_ID,
+        label: browser.i18n.getMessage('prompt_chat_email'),
+        type: '1',
+        show_in: 'popup',
+        position_display: -1,
+        custom_icon: 'moz-extension:images/context_menu/custom/love-letter.png',
+    };
+}
+
+async function getMessagePlainText(messageId) {
+    const parts = await browser.messages.listInlineTextParts(messageId);
+    const plain = parts.find(p => p.contentType === 'text/plain');
+    if (plain) return plain.content.trim();
+    const html = parts.find(p => p.contentType === 'text/html');
+    if (html) return (await browser.messengerUtilities.convertToPlainText(html.content)).trim();
+    return '';
+}
+
+async function openEmailChat(tabId, selectedMessages = null) {
+    if (!tabId) {
+        const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+        tabId = tabs[0]?.id;
+    }
+    let messages = Array.isArray(selectedMessages) ? [...selectedMessages] : [];
+    if (messages.length === 0) try {
+        const shown = await browser.messageDisplay.getDisplayedMessages(tabId);
+        messages = Array.isArray(shown) ? shown : (shown?.messages ?? []);
+    } catch (e) {
+        taLog.error("[ThunderAI] Chat about email: no displayed messages: " + e);
+    }
+    if (messages.length === 0) {
+        try {
+            const selected = await browser.mailTabs.getSelectedMessages(tabId);
+            messages = selected?.messages ?? [];
+        } catch (e) {
+            taLog.error("[ThunderAI] Chat about email: no selected messages: " + e);
+        }
+    }
+    if (messages.length === 0) {
+        const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+        browser.tabs.sendMessage(tabId, { command: "sendAlert", curr_tab_type: tabs[0]?.type, message: browser.i18n.getMessage('chat_email_no_message') });
+        return;
+    }
+
+    // Oldest first, keeping the most recent ones if the selection is very large.
+    messages.sort((a, b) => new Date(a.date) - new Date(b.date));
+    if (messages.length > CHAT_EMAIL_MAX_MESSAGES) {
+        messages = messages.slice(-CHAT_EMAIL_MAX_MESSAGES);
+    }
+
+    const blocks = [];
+    for (const [i, msg] of messages.entries()) {
+        let body = '';
+        try {
+            body = await getMessagePlainText(msg.id);
+        } catch (e) {
+            taLog.error("[ThunderAI] Chat about email: could not read message " + msg.id + ": " + e);
+        }
+        blocks.push(
+            `=== Email ${i + 1} of ${messages.length} ===\n` +
+            `From: ${msg.author}\n` +
+            `To: ${(msg.recipients || []).join(', ')}\n` +
+            (msg.ccList?.length ? `Cc: ${msg.ccList.join(', ')}\n` : '') +
+            `Date: ${new Date(msg.date).toLocaleString()}\n` +
+            `Subject: ${msg.subject}\n\n` +
+            body
+        );
+    }
+    const context = browser.i18n.getMessage('chat_email_context_intro') + "\n\n" + blocks.join("\n\n");
+    const subject = messages[messages.length - 1].subject || '';
+
+    openChatGPT(context, "0", tabId, browser.i18n.getMessage('prompt_chat_email'), 0, {
+        id: CHAT_EMAIL_PROMPT_ID,
+        name: browser.i18n.getMessage('prompt_chat_email'),
+        type: '1',
+        action: '0',
+        use_diff_viewer: '0',
+        chat_mode: true,
+        chat_subject: subject,
+        chat_count: messages.length,
+    });
 }
 
 // ── Side panel (ThunderAI Side Panel fork) ──────────────────────────────
@@ -2021,6 +2119,17 @@ browser.menus.onClicked.addListener((info, tab) => {
     }
     const promptId = menuItemId.replace('mzta-ctx-', '');
 
+    if (promptId === CHAT_EMAIL_PROMPT_ID) {
+        (async () => {
+            // getMessages() is an async generator that pages through the selection.
+            const messages = [];
+            for await (const message of getMessages(info.selectedMessages)) {
+                messages.push(message);
+            }
+            await openEmailChat(tab?.id, messages);
+        })();
+        return;
+    }
     if (specialContextMenuActions[promptId]) {
         specialContextMenuActions[promptId](getMessages(info.selectedMessages));
     } else {

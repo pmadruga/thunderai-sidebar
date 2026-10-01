@@ -76,23 +76,6 @@ function createPanel(doc, extension) {
     `min-width: ${MIN_WIDTH}px; width: ${savedWidth()}px; ` +
     "background-color: var(--layout-background-1, Canvas); color: var(--layout-color-1, CanvasText);";
 
-  // Header: title and close button
-  const header = doc.createElement("div");
-  header.style.cssText =
-    "display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; " +
-    "border-bottom: 1px solid var(--layout-border-0, rgba(127,127,127,.25)); flex: none;";
-  const title = doc.createElement("span");
-  title.textContent = "ThunderAI";
-  title.style.cssText = "flex: 1; font-weight: 600;";
-  const close = doc.createElement("button");
-  close.className = "button button-flat icon-button";
-  close.textContent = "✕";
-  close.title = "Close";
-  close.setAttribute("aria-label", "Close ThunderAI panel");
-  close.style.cssText = "min-width: 28px; min-height: 28px; margin: 0; padding: 0 6px;";
-  close.addEventListener("click", () => removePanel(doc));
-  header.append(title, close);
-
   // The extension browser, configured like Thunderbird's extension popups
   const browser = doc.createXULElement("browser");
   browser.setAttribute("type", "content");
@@ -117,7 +100,7 @@ function createPanel(doc, extension) {
   browser.setAttribute("flex", "1");
   browser.style.cssText = "min-height: 0;";
 
-  panel.append(header, browser);
+  panel.append(browser);
 
   // Listen for the frame loader before inserting: it's created during the
   // insertion itself, so a listener added afterwards would never fire.
@@ -182,6 +165,38 @@ this.chatPanel = class extends ExtensionAPI {
             triggeringPrincipal: extension.principal,
           });
           return true;
+        },
+
+        async getTheme(windowId) {
+          const win = extension.windowManager.get(windowId, context)?.window;
+          const doc = win?.gTabmail?.currentAbout3Pane?.document ?? win?.document;
+          if (!doc?.body) {
+            return null;
+          }
+          // Resolve the theme's tokens by applying them to a hidden probe, so
+          // var() chains and light-dark() come back as plain rgb() values.
+          const probe = doc.createElement("div");
+          probe.style.cssText = "position: absolute; visibility: hidden; pointer-events: none;";
+          doc.body.append(probe);
+          const view = doc.defaultView;
+          const resolve = (property, value) => {
+            probe.style.setProperty(property, value);
+            const result = view.getComputedStyle(probe).getPropertyValue(property);
+            probe.style.removeProperty(property);
+            return result;
+          };
+          const theme = {
+            background: resolve("background-color", "var(--layout-background-1, Canvas)"),
+            text: resolve("color", "var(--layout-color-1, CanvasText)"),
+            text2: resolve("color", "var(--layout-color-2, GrayText)"),
+            text3: resolve("color", "var(--layout-color-3, GrayText)"),
+            border: resolve("color", "var(--layout-border-0, GrayText)"),
+            accent: resolve("color", "var(--selected-item-color, AccentColor)"),
+            accentText: resolve("color", "var(--selected-item-text-color, AccentColorText)"),
+            font: view.getComputedStyle(doc.body).fontFamily,
+          };
+          probe.remove();
+          return theme;
         },
 
         async close() {
