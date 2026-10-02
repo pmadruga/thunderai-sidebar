@@ -12,3 +12,9 @@ source: https://cdn.jsdelivr.net/npm/diff@9.0.0/dist/diff.js
 
 file: api_webchat/markdown-it.min.js
 source: https://cdn.jsdelivr.net/npm/markdown-it@14.3.0/dist/markdown-it.min.js
+
+file: js/lib/pdfjs/pdf.min.mjs
+source: https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.min.mjs
+
+file: js/lib/pdfjs/pdf.worker.min.mjs
+source: https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.worker.min.mjs

@@ -75,3 +75,26 @@ the per-answer Close button with a header ✕, and uses a thin themed scrollbar.
   for the mail tab, which reloads the panel with that prompt.
 - No "AI Summary" button is drawn on emails: the manual summary mode
   (`summarize_auto === 1`) returns early. Automatic summaries are unchanged.
+
+## Document attachments
+
+`api_webchat/attachments.js` turns a user-chosen file into plain text:
+text-like files directly, PDF with the bundled pdf.js
+(`js/lib/pdfjs/`, Apache-2.0, see VENDORS.md; `isEvalSupported: false`
+because extension pages forbid eval; cleanup via `loadingTask.destroy()` in
+pdf.js 6), and .docx by reading `word/document.xml` from the zip with
+`DecompressionStream('deflate-raw')`. Each document is capped at
+`MAX_DOCUMENT_CHARS`. The message input has a paperclip button, a hidden file
+input and drag-and-drop; files show as removable chips. On send, the model
+gets: email context (first message of an email chat) → attached documents →
+the question; the user's bubble shows the question plus the file names.
+Attachments are per message and are not kept when the panel switches email.
+
+## Following the selection
+
+A single selected email expands to its whole conversation via
+`chatPanel.getThreadMessages()` (the folder's thread, through the msg DB and
+`messageManager.convert()`). `messageDisplay.onMessagesDisplayed` (debounced
+450 ms) re-opens the email chat for the new selection while the panel is open
+and `chat_follow_selection` is on (default), unless the selection belongs to
+the conversation already loaded (`_emailChatKey`).

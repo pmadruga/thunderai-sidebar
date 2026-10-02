@@ -39,6 +39,32 @@
             "minimum": 0
           }
         ]
+      },
+      {
+        "name": "isOpen",
+        "type": "function",
+        "async": true,
+        "description": "Whether the side panel is open in the given window.",
+        "parameters": [
+          {
+            "name": "windowId",
+            "type": "integer",
+            "minimum": 0
+          }
+        ]
+      },
+      {
+        "name": "getThreadMessages",
+        "type": "function",
+        "async": true,
+        "description": "All messages of the conversation (thread) containing the given message, in its folder, as MessageHeader objects. Null if unavailable.",
+        "parameters": [
+          {
+            "name": "messageId",
+            "type": "integer",
+            "minimum": 1
+          }
+        ]
       }
     ]
   }

@@ -2793,6 +2793,34 @@
     "message": "Left",
     "description": ""
   },
+  "attach_button_title": {
+    "message": "Attach documents (PDF, Word, text)",
+    "description": "Tooltip of the paperclip button in the chat input."
+  },
+  "attach_reading": {
+    "message": "reading…",
+    "description": ""
+  },
+  "attach_unsupported": {
+    "message": "$1: unsupported file type (use PDF, Word .docx or text files)",
+    "description": "$1 is the file name."
+  },
+  "attach_failed": {
+    "message": "$1: couldn't read this file",
+    "description": "$1 is the file name."
+  },
+  "attach_truncated": {
+    "message": "(trimmed, too long)",
+    "description": "Marks a document that was cut to fit."
+  },
+  "attach_remove": {
+    "message": "Remove $1",
+    "description": "$1 is the file name."
+  },
+  "attach_docs_intro": {
+    "message": "I've attached the following documents. Use them as context for my question.",
+    "description": ""
+  },
   "chat_with_ai": {
     "message": "Chat with AI",
     "description": "Label of the message header button that opens the side panel chat about the displayed email."
@@ -2840,6 +2868,14 @@
   "chat_panel_close": {
     "message": "Close",
     "description": "Tooltip of the close button in the chat side panel."
+  },
+  "prefs_chat_follow_selection": {
+    "message": "Side panel follows the selected email",
+    "description": ""
+  },
+  "prefs_chat_follow_selection_info": {
+    "message": "While the side panel is open, selecting another email switches the chat to that email's conversation.",
+    "description": ""
   },
   "prefs_chat_in_side_panel": {
     "message": "Open the AI chat in a side panel",

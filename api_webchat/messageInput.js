@@ -22,6 +22,7 @@
 
 import { buildSendIcon, buildStopIcon, buildCheckIcon, buildAlertIcon } from './svgIcons.js';
 import { SHARED_BASE_CSS } from './sharedStyles.js';
+import { extractDocumentText, UnsupportedDocumentError } from './attachments.js';
 
 // Set when the chat runs in the ThunderAI side panel (see experiments/chatPanel)
 const mztaInPanel = new URLSearchParams(window.location.search).get('panel') === '1';
@@ -40,6 +41,86 @@ messagesInputStyle.textContent = SHARED_BASE_CSS + `
         gap: 10px;
         padding: 12px 16px 16px;
         border-top: 1px solid var(--border);
+        flex-wrap: wrap;
+    }
+    :host(.drag-over) {
+        background: var(--accent-soft);
+    }
+
+    /* Document attachments (ThunderAI Side Panel fork) */
+    #attachButton {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 42px;
+        flex-shrink: 0;
+        padding: 0;
+        border: none;
+        border-radius: var(--r-md);
+        background: transparent;
+        color: var(--ink-2);
+        cursor: pointer;
+    }
+    #attachButton:hover:not(:disabled) {
+        background: var(--hover);
+        color: var(--ink);
+    }
+    #attachButton:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+    }
+    #attachButton svg {
+        width: 18px;
+        height: 18px;
+    }
+    #attachmentChips {
+        display: none;
+        flex-basis: 100%;
+        order: -1;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: -2px;
+    }
+    #attachmentChips.has-items {
+        display: flex;
+    }
+    .attachment-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        max-width: 100%;
+        padding: 3px 4px 3px 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-pill);
+        background: var(--surface);
+        color: var(--ink-2);
+        font-size: .75rem;
+    }
+    .attachment-chip.error {
+        border-color: var(--err-border);
+        color: var(--err-ink);
+    }
+    .attachment-chip .chip-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .attachment-chip button {
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .attachment-chip button:hover {
+        background: var(--hover);
+        color: var(--ink);
     }
     /* Heights are derived from line-height + vertical padding + borders:
        one line = 1.125rem + 2*11px + 2*1px = 42px, matching #sendButton.
@@ -264,6 +345,28 @@ messageInputTemplate.content.appendChild(messagesInputStyle);
 
 // A textarea, not an input: the field grows from one to three lines as the text
 // wraps (see the #messageInputField rule and _autoResize below), then scrolls.
+const attachButton = document.createElement('button');
+attachButton.id = 'attachButton';
+attachButton.type = 'button';
+attachButton.title = browser.i18n.getMessage('attach_button_title');
+attachButton.setAttribute('aria-label', browser.i18n.getMessage('attach_button_title'));
+const attachSvg = new DOMParser().parseFromString('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>', 'image/svg+xml').documentElement;
+attachButton.appendChild(document.importNode(attachSvg, true));
+messageInputTemplate.content.appendChild(attachButton);
+
+const attachInput = document.createElement('input');
+attachInput.id = 'attachInput';
+attachInput.type = 'file';
+attachInput.multiple = true;
+attachInput.hidden = true;
+attachInput.accept = '.pdf,.docx,.txt,.md,.markdown,.csv,.tsv,.json,.xml,.html,.htm,.yaml,.yml,.log,.eml,.ics,.rtf,text/*';
+messageInputTemplate.content.appendChild(attachInput);
+
+const attachmentChips = document.createElement('div');
+attachmentChips.id = 'attachmentChips';
+attachmentChips.setAttribute('role', 'list');
+messageInputTemplate.content.appendChild(attachmentChips);
+
 const inputField = document.createElement('textarea');
 inputField.id = 'messageInputField';
 inputField.rows = 1;
@@ -341,6 +444,31 @@ class MessageInput extends HTMLElement {
         this._statusLogger = shadowRoot.querySelector('#statusLogger');
         this._statusLoggerIcon = shadowRoot.querySelector('#statusLoggerIcon');
         this._statusLoggerText = shadowRoot.querySelector('#statusLoggerText');
+
+        // Document attachments
+        this._attachments = [];
+        this._attachButton = shadowRoot.querySelector('#attachButton');
+        this._attachInput = shadowRoot.querySelector('#attachInput');
+        this._attachmentChips = shadowRoot.querySelector('#attachmentChips');
+        this._attachButton.addEventListener('click', () => this._attachInput.click());
+        this._attachInput.addEventListener('change', () => {
+            this._addAttachments([...this._attachInput.files]);
+            this._attachInput.value = '';
+        });
+        this.addEventListener('dragover', (e) => {
+            if (e.dataTransfer?.types?.includes('Files')) {
+                e.preventDefault();
+                this.classList.add('drag-over');
+            }
+        });
+        this.addEventListener('dragleave', () => this.classList.remove('drag-over'));
+        this.addEventListener('drop', (e) => {
+            this.classList.remove('drag-over');
+            if (e.dataTransfer?.files?.length) {
+                e.preventDefault();
+                this._addAttachments([...e.dataTransfer.files]);
+            }
+        });
 
         this._messageInputField.addEventListener('keydown', this._handleKeyDown.bind(this));
         this._messageInputField.addEventListener('input', this._autoResize.bind(this));
@@ -555,18 +683,87 @@ class MessageInput extends HTMLElement {
         let messageContent = this._messageInputField.value;
         this._messageInputField.value = '';
         this._autoResize();
+        // Documents attached to this message (only fully read ones are sent).
+        const documents = this._attachments.filter(a => a.status === 'ready');
         if (this.messagesAreaComponent) {
-            this.messagesAreaComponent.appendUserMessage(messageContent);
+            const bubbleText = documents.length > 0
+                ? messageContent + "<br><br>📄 " + documents.map(d => d.name).join(', ')
+                : messageContent;
+            this.messagesAreaComponent.appendUserMessage(bubbleText);
         }
         this.showWaitingStatus();
-        let workerContent = messageContent;
+        // What the model receives: the email context (first message of an email
+        // chat), then any attached documents, then the user's own words. Only
+        // the user's words (plus the document names) appear in the chat.
+        const question = browser.i18n.getMessage('chat_email_question_label') + "\n" + messageContent;
+        const parts = [];
         if (this._pendingContext) {
-            // First message of an email chat: send the emails along with it.
-            // Only the user's own words are shown in the conversation.
-            workerContent = this._pendingContext + "\n\n" + browser.i18n.getMessage('chat_email_question_label') + "\n" + messageContent;
+            parts.push(this._pendingContext);
             this._pendingContext = null;
         }
+        if (documents.length > 0) {
+            parts.push(browser.i18n.getMessage('attach_docs_intro') + "\n\n" + documents.map(d =>
+                `=== Document: ${d.name}${d.truncated ? ' ' + browser.i18n.getMessage('attach_truncated') : ''} ===\n${d.text}`
+            ).join("\n\n"));
+            this._clearAttachments();
+        }
+        const workerContent = parts.length > 0 ? parts.join("\n\n") + "\n\n" + question : messageContent;
         this.worker.postMessage({ type: 'chatMessage', message: workerContent });
+    }
+
+    async _addAttachments(files) {
+        for (const file of files) {
+            const item = { name: file.name, status: 'reading', text: '', truncated: false };
+            this._attachments.push(item);
+            this._renderAttachments();
+            try {
+                const result = await extractDocumentText(file);
+                if (!result.text) {
+                    throw new Error('empty');
+                }
+                Object.assign(item, result, { status: 'ready' });
+            } catch (e) {
+                item.status = 'error';
+                item.error = e instanceof UnsupportedDocumentError
+                    ? browser.i18n.getMessage('attach_unsupported', [file.name])
+                    : browser.i18n.getMessage('attach_failed', [file.name]);
+                console.error('[ThunderAI] Could not read attachment', file.name, e);
+            }
+            this._renderAttachments();
+        }
+    }
+
+    _clearAttachments() {
+        this._attachments = [];
+        this._renderAttachments();
+    }
+
+    _renderAttachments() {
+        const list = this._attachmentChips;
+        list.replaceChildren();
+        for (const item of this._attachments) {
+            const chip = document.createElement('span');
+            chip.className = 'attachment-chip' + (item.status === 'error' ? ' error' : '');
+            chip.setAttribute('role', 'listitem');
+            const label = document.createElement('span');
+            label.className = 'chip-name';
+            label.textContent = item.status === 'reading'
+                ? `📄 ${item.name} — ${browser.i18n.getMessage('attach_reading')}`
+                : item.status === 'error' ? `⚠ ${item.error}` : `📄 ${item.name}`;
+            chip.title = item.status === 'error' ? item.error : item.name;
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.textContent = '✕';
+            remove.title = browser.i18n.getMessage('attach_remove', [item.name]);
+            remove.setAttribute('aria-label', remove.title);
+            remove.addEventListener('click', () => {
+                this._attachments = this._attachments.filter(a => a !== item);
+                this._renderAttachments();
+            });
+            chip.append(label, remove);
+            list.appendChild(chip);
+        }
+        list.classList.toggle('has-items', this._attachments.length > 0);
     }
 
     // Chat about an email: keep the emails as context for the first message.

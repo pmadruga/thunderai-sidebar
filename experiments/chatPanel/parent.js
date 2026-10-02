@@ -199,6 +199,32 @@ this.chatPanel = class extends ExtensionAPI {
           return theme;
         },
 
+        async isOpen(windowId) {
+          const win = extension.windowManager.get(windowId, context)?.window;
+          return !!win?.document.getElementById(PANEL_ID);
+        },
+
+        async getThreadMessages(messageId) {
+          const hdr = extension.messageManager.get(messageId);
+          const db = hdr?.folder?.msgDatabase;
+          const thread = db?.getThreadContainingMsgHdr(hdr);
+          if (!thread) {
+            return null;
+          }
+          const gone = Ci.nsMsgMessageFlags.IMAPDeleted | Ci.nsMsgMessageFlags.Expunged;
+          const messages = [];
+          for (let i = 0; i < thread.numChildren; i++) {
+            const child = thread.getChildHdrAt(i);
+            if (child && !(child.flags & gone)) {
+              const message = extension.messageManager.convert(child);
+              if (message) {
+                messages.push(message);
+              }
+            }
+          }
+          return messages;
+        },
+
         async close() {
           for (const win of allMailWindows()) {
             removePanel(win.document);

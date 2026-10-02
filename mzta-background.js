@@ -624,6 +624,7 @@ messenger.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 break;
             case 'chatgpt_close':
                     if (message.panel) {
+                        _emailChatKey = null;
                         return browser.chatPanel.close();
                     }
                     async function _closeChatGptWindow(window_id) {
@@ -1858,6 +1859,44 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
 const CHAT_EMAIL_PROMPT_ID = 'prompt_chat_email';
 const CHAT_EMAIL_MAX_MESSAGES = 30;
 
+// Identifies the set of emails the panel is chatting about, so re-selecting an
+// email of the same conversation doesn't restart the chat.
+let _emailChatKey = null;
+
+function emailChatKey(messages) {
+    return messages.map(m => m.id).sort((a, b) => a - b).join(',');
+}
+
+// Follow the selection: while the side panel is open, selecting another email
+// switches the chat to that email's conversation. Debounced so arrowing
+// through the list doesn't start a chat for every message on the way.
+let _followTimer = null;
+browser.messageDisplay.onMessagesDisplayed.addListener((tab, messages) => {
+    clearTimeout(_followTimer);
+    _followTimer = setTimeout(() => followSelection(tab, messages), 450);
+});
+
+async function followSelection(tab, messages) {
+    try {
+        if (!Array.isArray(messages) || messages.length === 0) return;
+        const prefs_follow = await browser.storage.sync.get({
+            chat_in_side_panel: prefs_default.chat_in_side_panel,
+            chat_follow_selection: prefs_default.chat_follow_selection,
+        });
+        if (!prefs_follow.chat_in_side_panel || !prefs_follow.chat_follow_selection) return;
+        if (!(await browser.chatPanel.isOpen(tab.windowId))) return;
+        let set = messages;
+        if (messages.length === 1) {
+            const thread = await browser.chatPanel.getThreadMessages(messages[0].id);
+            if (Array.isArray(thread) && thread.length > 1) set = thread;
+        }
+        if (emailChatKey(set) === _emailChatKey) return;   // same conversation
+        await openEmailChat(tab.id, messages);
+    } catch (e) {
+        taLog.error("[ThunderAI] Follow selection failed: " + e);
+    }
+}
+
 function chatAboutEmailMenuItem() {
     return {
         id: CHAT_EMAIL_PROMPT_ID,
@@ -1904,8 +1943,21 @@ async function openEmailChat(tabId, selectedMessages = null) {
         return;
     }
 
+    // A single email brings its whole conversation (thread) along.
+    if (messages.length === 1) {
+        try {
+            const thread = await browser.chatPanel.getThreadMessages(messages[0].id);
+            if (Array.isArray(thread) && thread.length > 1) {
+                messages = thread;
+            }
+        } catch (e) {
+            taLog.error("[ThunderAI] Chat about email: could not load the conversation: " + e);
+        }
+    }
+
     // Oldest first, keeping the most recent ones if the selection is very large.
     messages.sort((a, b) => new Date(a.date) - new Date(b.date));
+    _emailChatKey = emailChatKey(messages);
     if (messages.length > CHAT_EMAIL_MAX_MESSAGES) {
         messages = messages.slice(-CHAT_EMAIL_MAX_MESSAGES);
     }
