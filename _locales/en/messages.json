@@ -2841,6 +2841,10 @@
     "message": "The following email conversation is the context for this chat. Answer my questions about it. Reply in the language I write in, and keep answers concise unless I ask for detail.",
     "description": ""
   },
+  "chat_email_identity": {
+    "message": "I am $1; emails marked (me) were sent by me. When I ask for a reply, write it as me, to the other participants.",
+    "description": "$1 is the user's name and email address."
+  },
   "chat_email_question_label": {
     "message": "My question:",
     "description": ""

@@ -1106,6 +1106,8 @@ class MessagesArea extends HTMLElement {
                 case "1":     // do reply
                     // console.log("[ThunderAI] (do reply) fullTextHTMLAtAssignment: " + fullTextHTMLAtAssignment);
                     await browser.runtime.sendMessage({command: "chatgpt_replyMessage", text: finalText, tabId: promptData.tabId, mailMessageId: promptData.mailMessageId, replyType: replyType});
+                    // The side panel stays open so the chat can continue.
+                    if (mztaInPanel) break;
                     // Fire-and-forget: this closes our own window, unloading the
                     // context before the query can resolve. Swallow the expected
                     // "Actor 'Conduits' destroyed" rejection instead of leaving it

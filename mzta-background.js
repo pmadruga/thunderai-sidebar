@@ -1486,6 +1486,15 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
     }
 
     let mailMessage = await browser.messageDisplay.getDisplayedMessage(curr_tabId);
+    if (!mailMessage && prompt_info?.chat_reply_to_id) {
+        // Chat about a conversation: no single displayed message, so "Use this
+        // answer" replies to the email chosen by openEmailChat().
+        try {
+            mailMessage = await browser.messages.get(prompt_info.chat_reply_to_id);
+        } catch (e) {
+            taLog.error("[ThunderAI] Chat reply target not found: " + e);
+        }
+    }
 
     switch(prefs.connection_type){
         case 'chatgpt_web':
@@ -1908,6 +1917,40 @@ function chatAboutEmailMenuItem() {
     };
 }
 
+// The user's own addresses, and the identity to speak as: the default
+// identity of the account the emails belong to.
+async function getMyIdentities(messages) {
+    const emails = new Set();
+    let primary = null;
+    try {
+        const accounts = await browser.accounts.list();
+        for (const account of accounts) {
+            for (const identity of account.identities || []) {
+                if (identity.email) emails.add(identity.email.toLowerCase());
+            }
+        }
+        const accountId = messages.find(m => m.folder?.accountId)?.folder.accountId;
+        const account = accounts.find(a => a.id === accountId);
+        primary = account?.identities?.[0] ?? accounts.find(a => a.identities?.length)?.identities[0] ?? null;
+    } catch (e) {
+        taLog.error("[ThunderAI] Could not read identities: " + e);
+    }
+    return { emails, primary };
+}
+
+function authorAddress(author) {
+    return (String(author).match(/<([^>]+)>/)?.[1] || String(author)).trim().toLowerCase();
+}
+
+// Reply target for a whole conversation: the newest email not sent by one of
+// the user's own identities (falls back to the newest email).
+function latestMessageNotFromMe(messages, myEmails) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+        if (!myEmails.has(authorAddress(messages[i].author))) return messages[i].id;
+    }
+    return messages[messages.length - 1].id;
+}
+
 async function getMessagePlainText(messageId) {
     const parts = await browser.messages.listInlineTextParts(messageId);
     const plain = parts.find(p => p.contentType === 'text/plain');
@@ -1943,6 +1986,9 @@ async function openEmailChat(tabId, selectedMessages = null) {
         return;
     }
 
+    // The email the user picked, if just one: that's the one to reply to.
+    const pickedId = messages.length === 1 ? messages[0].id : null;
+
     // A single email brings its whole conversation (thread) along.
     if (messages.length === 1) {
         try {
@@ -1962,6 +2008,7 @@ async function openEmailChat(tabId, selectedMessages = null) {
         messages = messages.slice(-CHAT_EMAIL_MAX_MESSAGES);
     }
 
+    const me = await getMyIdentities(messages);
     const blocks = [];
     for (const [i, msg] of messages.entries()) {
         let body = '';
@@ -1972,7 +2019,7 @@ async function openEmailChat(tabId, selectedMessages = null) {
         }
         blocks.push(
             `=== Email ${i + 1} of ${messages.length} ===\n` +
-            `From: ${msg.author}\n` +
+            `From: ${msg.author}${me.emails.has(authorAddress(msg.author)) ? ' (me)' : ''}\n` +
             `To: ${(msg.recipients || []).join(', ')}\n` +
             (msg.ccList?.length ? `Cc: ${msg.ccList.join(', ')}\n` : '') +
             `Date: ${new Date(msg.date).toLocaleString()}\n` +
@@ -1980,14 +2027,23 @@ async function openEmailChat(tabId, selectedMessages = null) {
             body
         );
     }
-    const context = browser.i18n.getMessage('chat_email_context_intro') + "\n\n" + blocks.join("\n\n");
+    // Tell the model who "I" am, so drafted replies are written from the user.
+    const whoAmI = me.primary
+        ? browser.i18n.getMessage('chat_email_identity', [me.primary.name ? `${me.primary.name} <${me.primary.email}>` : me.primary.email])
+        : '';
+    const context = browser.i18n.getMessage('chat_email_context_intro') + (whoAmI ? " " + whoAmI : "") +
+        "\n\n" + blocks.join("\n\n");
+    const replyToId = pickedId ?? latestMessageNotFromMe(messages, me.emails);
     const subject = messages[messages.length - 1].subject || '';
 
-    openChatGPT(context, "0", tabId, browser.i18n.getMessage('prompt_chat_email'), 0, {
+    // action "1": every answer gets "Use this answer", which opens a reply with
+    // the answer as its body.
+    openChatGPT(context, "1", tabId, browser.i18n.getMessage('prompt_chat_email'), 0, {
         id: CHAT_EMAIL_PROMPT_ID,
         name: browser.i18n.getMessage('prompt_chat_email'),
         type: '1',
-        action: '0',
+        action: '1',
+        chat_reply_to_id: replyToId,
         use_diff_viewer: '0',
         chat_mode: true,
         chat_subject: subject,

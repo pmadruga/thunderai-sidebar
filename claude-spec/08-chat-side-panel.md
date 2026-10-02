@@ -98,3 +98,15 @@ A single selected email expands to its whole conversation via
 450 ms) re-opens the email chat for the new selection while the panel is open
 and `chat_follow_selection` is on (default), unless the selection belongs to
 the conversation already loaded (`_emailChatKey`).
+
+## Using an answer as the reply
+
+Email chats run with `action: "1"`, so every answer gets "Use this answer"
+(reply / reply all), which opens a reply with the answer as its body. The
+reply target is the email the user picked, or for a whole conversation the
+newest email not sent by one of the user's identities
+(`latestMessageNotFromMe()`), passed as `prompt_info.chat_reply_to_id` and
+used by `openChatGPT()` when no single message is displayed. The context
+tells the model who the user is (`chat_email_identity`, default identity of
+the emails' account) and marks the user's own emails "(me)", so drafts are
+written from the user. In the side panel the chat stays open after replying.
