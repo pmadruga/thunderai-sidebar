@@ -2821,6 +2821,114 @@
     "message": "I've attached the following documents. Use them as context for my question.",
     "description": ""
   },
+  "sp_toggle_off": {
+    "message": "Super Productivity: off — click to let the AI see and manage your tasks",
+    "description": ""
+  },
+  "sp_toggle_on": {
+    "message": "Super Productivity: on — the AI can read your tasks and propose changes",
+    "description": ""
+  },
+  "sp_setup_text": {
+    "message": "Paste your Super Productivity access token (Super Productivity → Settings → Misc → Access Token). It's stored only on this computer.",
+    "description": ""
+  },
+  "sp_token_placeholder": {
+    "message": "Access token",
+    "description": ""
+  },
+  "sp_save": {
+    "message": "Connect",
+    "description": ""
+  },
+  "sp_cancel": {
+    "message": "Cancel",
+    "description": ""
+  },
+  "sp_error_token": {
+    "message": "That token was rejected. Copy it again from Settings → Misc → Access Token.",
+    "description": ""
+  },
+  "sp_error_unreachable": {
+    "message": "Super Productivity isn't reachable at 127.0.0.1:3876. Is the app running with the Local REST API enabled?",
+    "description": ""
+  },
+  "sp_error_permission": {
+    "message": "Thunderbird needs permission to reach Super Productivity on this computer.",
+    "description": ""
+  },
+  "sp_confirm": {
+    "message": "Confirm",
+    "description": ""
+  },
+  "sp_decline": {
+    "message": "Cancel",
+    "description": ""
+  },
+  "sp_done_ok": {
+    "message": "✓ Done",
+    "description": ""
+  },
+  "sp_declined": {
+    "message": "Cancelled — nothing was changed.",
+    "description": ""
+  },
+  "sp_tool_failed": {
+    "message": "Failed: $1",
+    "description": "$1 is the error message."
+  },
+  "sp_desc_list_tasks": {
+    "message": "Looked up your tasks $1",
+    "description": "$1 is an optional quoted search text."
+  },
+  "sp_desc_list_projects": {
+    "message": "Looked up your projects",
+    "description": ""
+  },
+  "sp_desc_list_tags": {
+    "message": "Looked up your tags",
+    "description": ""
+  },
+  "sp_desc_current": {
+    "message": "Checked the task you're tracking",
+    "description": ""
+  },
+  "sp_desc_create": {
+    "message": "Create task $1?",
+    "description": "$1 lists the title and details."
+  },
+  "sp_desc_update": {
+    "message": "Change task $1: $2?",
+    "description": "$1 is the task title, $2 the changes."
+  },
+  "sp_desc_start": {
+    "message": "Start tracking time on $1?",
+    "description": "$1 is the task title."
+  },
+  "sp_desc_stop": {
+    "message": "Stop tracking time on the current task?",
+    "description": ""
+  },
+  "sp_due": {
+    "message": "due $1",
+    "description": "$1 is a date."
+  },
+  "sp_estimate": {
+    "message": "$1 min estimate",
+    "description": "$1 is minutes."
+  },
+  "sp_mark_done": {
+    "message": "mark as done",
+    "description": ""
+  },
+  "sp_mark_not_done": {
+    "message": "mark as not done",
+    "description": ""
+  },
+  "sp_with_notes": {
+    "message": "with notes",
+    "description": ""
+  },
   "chat_with_ai": {
     "message": "Chat with AI",
     "description": "Label of the message header button that opens the side panel chat about the displayed email."

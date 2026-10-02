@@ -110,3 +110,23 @@ used by `openChatGPT()` when no single message is displayed. The context
 tells the model who the user is (`chat_email_identity`, default identity of
 the emails' account) and marks the user's own emails "(me)", so drafts are
 written from the user. In the side panel the chat stays open after replying.
+
+## Super Productivity tools
+
+A checklist toggle next to the paperclip (shown only for the OpenAI-compatible
+connection, which is the one with tool calling) lets the model use the Super
+Productivity desktop app's Local REST API (`api_webchat/superproductivity.js`,
+default `http://127.0.0.1:3876`, Bearer token from Settings → Misc). Turning
+it on requests the `http://127.0.0.1/*` host permission (synchronously, inside
+the click handler), asks for the token inline if none is saved, and checks it
+with `GET /status`. URL, token and on/off live in `storage.local` (never
+synced); the toggle turns itself back on when the panel opens if all three are
+still valid.
+
+While on, the page sends OpenAI function tools to the worker (`setTools`).
+The worker streams `delta.tool_calls`, and at the end of a turn with calls it
+posts `toolCalls` instead of `tokensDone`. The controller runs them and posts
+`toolResults`, and the worker continues the turn. Reads (list/search tasks,
+projects, tags, current task) run directly and leave a "🔎" note. Writes
+(create, update, start, stop tracking) show a confirmation card first; Cancel
+returns `{cancelled: true}` to the model. There is no delete tool.

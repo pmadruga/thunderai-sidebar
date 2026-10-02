@@ -23,6 +23,10 @@
 import { buildSendIcon, buildStopIcon, buildCheckIcon, buildAlertIcon } from './svgIcons.js';
 import { SHARED_BASE_CSS } from './sharedStyles.js';
 import { extractDocumentText, UnsupportedDocumentError } from './attachments.js';
+import { getSpSettings, saveSpSettings, verifySpConnection, spToolDefinitions, spOriginPattern } from './superproductivity.js';
+
+// Tools need the OpenAI-compatible connection (the only worker with tool calls).
+const mztaToolsSupported = new URLSearchParams(window.location.search).get('llm') === 'openai_comp_api';
 
 // Set when the chat runs in the ThunderAI side panel (see experiments/chatPanel)
 const mztaInPanel = new URLSearchParams(window.location.search).get('panel') === '1';
@@ -73,6 +77,83 @@ messagesInputStyle.textContent = SHARED_BASE_CSS + `
     #attachButton svg {
         width: 18px;
         height: 18px;
+    }
+    #spToggle {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 42px;
+        flex-shrink: 0;
+        padding: 0;
+        border: none;
+        border-radius: var(--r-md);
+        background: transparent;
+        color: var(--ink-2);
+        cursor: pointer;
+    }
+    #spToggle.available {
+        display: flex;
+    }
+    #spToggle:hover {
+        background: var(--hover);
+        color: var(--ink);
+    }
+    #spToggle[aria-pressed="true"] {
+        background: var(--accent-soft);
+        color: var(--accent);
+    }
+    #spToggle:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+    }
+    #spToggle svg {
+        width: 18px;
+        height: 18px;
+    }
+    #spSetup {
+        display: none;
+        flex-basis: 100%;
+        order: -1;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        font-size: .8125rem;
+        color: var(--ink-2);
+    }
+    #spSetup.open {
+        display: flex;
+    }
+    #spSetup p {
+        flex-basis: 100%;
+        margin: 0;
+    }
+    #spSetup p.error {
+        color: var(--err-ink);
+    }
+    #spSetup input {
+        flex: 1 1 12rem;
+        min-width: 0;
+        padding: 6px 10px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--r-sm);
+        background: var(--surface);
+        color: var(--ink);
+        font: inherit;
+    }
+    #spSetup button {
+        padding: 6px 12px;
+        border-radius: var(--r-sm);
+        font: inherit;
+        cursor: pointer;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--ink-2);
+    }
+    #spSetup button.primary {
+        border-color: transparent;
+        background: var(--accent);
+        color: #fff;
     }
     #attachmentChips {
         display: none;
@@ -362,6 +443,18 @@ attachInput.hidden = true;
 attachInput.accept = '.pdf,.docx,.txt,.md,.markdown,.csv,.tsv,.json,.xml,.html,.htm,.yaml,.yml,.log,.eml,.ics,.rtf,text/*';
 messageInputTemplate.content.appendChild(attachInput);
 
+const spToggle = document.createElement('button');
+spToggle.id = 'spToggle';
+spToggle.type = 'button';
+spToggle.setAttribute('aria-pressed', 'false');
+const spSvg = new DOMParser().parseFromString('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>', 'image/svg+xml').documentElement;
+spToggle.appendChild(document.importNode(spSvg, true));
+messageInputTemplate.content.appendChild(spToggle);
+
+const spSetup = document.createElement('div');
+spSetup.id = 'spSetup';
+messageInputTemplate.content.appendChild(spSetup);
+
 const attachmentChips = document.createElement('div');
 attachmentChips.id = 'attachmentChips';
 attachmentChips.setAttribute('role', 'list');
@@ -445,6 +538,11 @@ class MessageInput extends HTMLElement {
         this._statusLoggerIcon = shadowRoot.querySelector('#statusLoggerIcon');
         this._statusLoggerText = shadowRoot.querySelector('#statusLoggerText');
 
+        // Super Productivity toggle
+        this._spToggle = shadowRoot.querySelector('#spToggle');
+        this._spSetup = shadowRoot.querySelector('#spSetup');
+        this._spToggle.addEventListener('click', () => this._toggleSuperProductivity());
+
         // Document attachments
         this._attachments = [];
         this._attachButton = shadowRoot.querySelector('#attachButton');
@@ -496,6 +594,128 @@ class MessageInput extends HTMLElement {
 
     async init(worker) {
         this.worker = worker;
+        this._initSuperProductivity();
+    }
+
+    // ── Super Productivity (ThunderAI Side Panel fork) ──────────────────────
+
+    async _initSuperProductivity() {
+        if (!mztaToolsSupported) return;
+        this._spToggle.classList.add('available');
+        this._setSpState(false);
+        const settings = await getSpSettings();
+        // Cached so a click can ask for the permission before any await (the
+        // permission prompt is only allowed directly inside a user action).
+        this._spOrigin = spOriginPattern(settings.url);
+        // Remembered as on: enable quietly if permission and token still work.
+        if (settings.enabled && settings.token) {
+            const allowed = await browser.permissions.contains({ origins: [this._spOrigin] });
+            if (allowed) {
+                try {
+                    await verifySpConnection();
+                    this._setSpState(true);
+                } catch (e) {
+                    // Leave it off; the user can switch it on to see the error.
+                }
+            }
+        }
+    }
+
+    _setSpState(on) {
+        this._spOn = on;
+        this._spToggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+        const title = browser.i18n.getMessage(on ? 'sp_toggle_on' : 'sp_toggle_off');
+        this._spToggle.title = title;
+        this._spToggle.setAttribute('aria-label', title);
+        this.worker?.postMessage({ type: 'setTools', tools: on ? spToolDefinitions() : null });
+    }
+
+    _requestSpPermission() {
+        // Must be called synchronously from the click handler, before any await.
+        return browser.permissions.request({ origins: [this._spOrigin || 'http://127.0.0.1/*'] }).catch(() => false);
+    }
+
+    async _toggleSuperProductivity() {
+        if (this._spOn) {
+            this._setSpState(false);
+            await saveSpSettings({ sp_enabled: false });
+            this._closeSpSetup();
+            return;
+        }
+        const permission = this._requestSpPermission();
+        const settings = await getSpSettings();
+        if (!settings.token) {
+            this._openSpSetup();
+            return;
+        }
+        await this._enableSuperProductivity(permission);
+    }
+
+    async _enableSuperProductivity(permission) {
+        try {
+            if (!(await permission)) {
+                throw new Error(browser.i18n.getMessage('sp_error_permission'));
+            }
+            await verifySpConnection();
+        } catch (e) {
+            const message = e.code === 'UNAUTHORIZED'
+                ? browser.i18n.getMessage('sp_error_token')
+                : e.code === 'UNREACHABLE' ? browser.i18n.getMessage('sp_error_unreachable') : e.message;
+            this._openSpSetup(message);
+            return false;
+        }
+        this._closeSpSetup();
+        await saveSpSettings({ sp_enabled: true });
+        this._setSpState(true);
+        return true;
+    }
+
+    _openSpSetup(errorMessage = '') {
+        const box = this._spSetup;
+        box.replaceChildren();
+        const text = document.createElement('p');
+        text.textContent = browser.i18n.getMessage('sp_setup_text');
+        box.appendChild(text);
+        if (errorMessage) {
+            const error = document.createElement('p');
+            error.className = 'error';
+            error.setAttribute('role', 'alert');
+            error.textContent = errorMessage;
+            box.appendChild(error);
+        }
+        const input = document.createElement('input');
+        input.type = 'password';
+        input.autocomplete = 'off';
+        input.placeholder = browser.i18n.getMessage('sp_token_placeholder');
+        input.setAttribute('aria-label', input.placeholder);
+        const save = document.createElement('button');
+        save.type = 'button';
+        save.className = 'primary';
+        save.textContent = browser.i18n.getMessage('sp_save');
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.textContent = browser.i18n.getMessage('sp_cancel');
+        const submit = async () => {
+            const token = input.value.trim();
+            if (!token) return;
+            const permission = this._requestSpPermission();
+            await saveSpSettings({ sp_api_token: token });
+            await this._enableSuperProductivity(permission);
+        };
+        save.addEventListener('click', submit);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); submit(); }
+            if (e.key === 'Escape') { e.preventDefault(); this._closeSpSetup(); }
+        });
+        cancel.addEventListener('click', () => this._closeSpSetup());
+        box.append(input, save, cancel);
+        box.classList.add('open');
+        input.focus();
+    }
+
+    _closeSpSetup() {
+        this._spSetup.classList.remove('open');
+        this._spSetup.replaceChildren();
     }
 
     setMessagesArea(messagesAreaComponent) {

@@ -30,6 +30,10 @@ let do_debug = false;
 let taLog = null;
 
 let conversationHistory = [];
+// Function tools offered to the model (ThunderAI Side Panel fork). Null = none.
+let tools = null;
+// Tool calls being assembled from the stream, by index.
+let toolCallsAccumulator = [];
 let assistantResponseAccumulator = '';
 let thinkingAccumulator = '';
 
@@ -68,11 +72,28 @@ self.onmessage = async function(event) {
         do_debug = event.data.do_debug;
         i18nStrings = event.data.i18nStrings;
         taLog = new taLogger('model-worker-openai_comp', do_debug);
+    } else if (event.data.type === 'setTools') {
+        tools = Array.isArray(event.data.tools) && event.data.tools.length > 0 ? event.data.tools : null;
+    } else if (event.data.type === 'toolResults') {
+        // Results of the tool calls the page ran: add them and let the model continue.
+        for (const result of event.data.results || []) {
+            conversationHistory.push({ role: 'tool', tool_call_id: result.tool_call_id, content: result.content });
+        }
+        await streamTurn();
     } else if (event.data.type === 'chatMessage') {
         conversationHistory.push({ role: 'user', content: event.data.message });
-
-    const response = await openai_comp.fetchResponse(conversationHistory); //4096);
         postMessage({ type: 'messageSent' });
+        await streamTurn();
+    } else if (event.data.type === 'stop') {
+        stopStreaming = true;
+    }
+};
+
+// One model turn: stream the answer; if the model asks for tools, hand the
+// calls to the page (which answers with 'toolResults') instead of finishing.
+async function streamTurn() {
+    toolCallsAccumulator = [];
+    const response = await openai_comp.fetchResponse(conversationHistory, 0, tools); //4096);
 
         if (!response.ok) {
             let error_message = '';
@@ -118,6 +139,19 @@ self.onmessage = async function(event) {
             if (done) {
                 taLog.log("AI full reasoning: " + thinkingAccumulator);
                 taLog.log("AI full response: " + assistantResponseAccumulator);
+                const calls = toolCallsAccumulator.filter(Boolean).map((c, i) => ({ ...c, id: c.id || ('call_' + Date.now() + '_' + i) }));
+                if (calls.length > 0) {
+                    // The model wants tools: record its request and hand the calls to
+                    // the page. The turn continues when 'toolResults' arrives.
+                    conversationHistory.push({
+                        role: 'assistant',
+                        content: assistantResponseAccumulator || null,
+                        tool_calls: calls.map(c => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments } })),
+                    });
+                    assistantResponseAccumulator = '';
+                    postMessage({ type: 'toolCalls', payload: { calls: calls.map(c => ({ id: c.id, name: c.name, arguments: c.arguments })) } });
+                    break;
+                }
                 conversationHistory.push({ role: 'assistant', content: assistantResponseAccumulator });
                 assistantResponseAccumulator = '';
                 postMessage({ type: 'tokensDone', payload: { thinking: thinkingAccumulator } });
@@ -183,9 +217,17 @@ self.onmessage = async function(event) {
                     assistantResponseAccumulator += content;
                     postMessage({ type: 'newToken', payload: { token: content } });
                 }
+                // Tool calls arrive in pieces: the id and name first, then the
+                // JSON arguments as string fragments, keyed by index.
+                if (Array.isArray(delta.tool_calls)) {
+                    for (const part of delta.tool_calls) {
+                        const i = part.index ?? 0;
+                        const call = toolCallsAccumulator[i] ??= { id: '', name: '', arguments: '' };
+                        if (part.id) call.id = part.id;
+                        if (part.function?.name) call.name += part.function.name;
+                        if (part.function?.arguments) call.arguments += part.function.arguments;
+                    }
+                }
             }
         }
-    } else if (event.data.type === 'stop') {
-        stopStreaming = true;
-    }
-};
+}

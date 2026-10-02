@@ -84,7 +84,7 @@ export class OpenAIComp {
     return output;
   }
 
-  fetchResponse = async (messages, maxTokens = 0) => {
+  fetchResponse = async (messages, maxTokens = 0, tools = null) => {
     try{
       const tempFloat = parseFloat(this.temperature);
       const curr_headers = {
@@ -105,7 +105,9 @@ export class OpenAIComp {
                 messages: messages,
                 stream: this.stream,
                 ...(maxTokens > 0 ? { 'max_tokens': parseInt(maxTokens) } : {}),
-                ...(this.temperature != '' && !Number.isNaN(tempFloat) ? { 'temperature': tempFloat } : {})
+                ...(this.temperature != '' && !Number.isNaN(tempFloat) ? { 'temperature': tempFloat } : {}),
+                // Function tools (ThunderAI Side Panel fork: Super Productivity)
+                ...(Array.isArray(tools) && tools.length > 0 ? { tools: tools } : {})
             }),
         });
         return response;

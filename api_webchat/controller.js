@@ -25,6 +25,7 @@ import { placeholdersUtils } from '../js/mzta-placeholders.js';
 import { getAPIsInitMessageString, convertNewlinesToBr } from '../js/mzta-utils.js';
 import { loadPrompt } from '../js/mzta-prompts.js';
 import { buildChatBubbleIcon } from './svgIcons.js';
+import { runSpTool, describeSpTool, getSpTaskTitle, SP_WRITE_TOOLS } from './superproductivity.js';
 
 // Set when the chat runs in the ThunderAI side panel (see experiments/chatPanel)
 const mztaInPanel = new URLSearchParams(window.location.search).get('panel') === '1';
@@ -323,6 +324,9 @@ worker.onmessage = async function(event) {
             await messagesArea.handleTokensDone(promptData);
             messageInput.enableInput();
             break;
+        case 'toolCalls':
+            await handleToolCalls(payload.calls);
+            break;
         case 'error':
             messagesArea.appendBotMessage(payload,'error');
             messageInput.enableInput(false);
@@ -332,6 +336,56 @@ worker.onmessage = async function(event) {
             console.error('[ThunderAI] Unknown event type from API worker:', type);
     }
 };
+
+// Tool calls from the model (ThunderAI Side Panel fork: Super Productivity).
+// Reads run straight away with a short note; anything that changes data waits
+// for the user's Confirm. Results go back to the worker, which continues.
+async function handleToolCalls(calls) {
+    const results = [];
+    for (const call of calls || []) {
+        let args = {};
+        try {
+            args = call.arguments ? JSON.parse(call.arguments) : {};
+        } catch (e) {
+            results.push({ tool_call_id: call.id, content: JSON.stringify({ error: 'Invalid JSON arguments' }) });
+            continue;
+        }
+        if (!call.name?.startsWith('sp_')) {
+            results.push({ tool_call_id: call.id, content: JSON.stringify({ error: 'Unknown tool ' + call.name }) });
+            continue;
+        }
+        if (SP_WRITE_TOOLS.has(call.name)) {
+            const title = args.task_id ? await getSpTaskTitle(args.task_id) : null;
+            const { ok, card } = await messagesArea.appendConfirmCard(
+                describeSpTool(call.name, args, title),
+                browser.i18n.getMessage('sp_confirm'),
+                browser.i18n.getMessage('sp_decline'));
+            if (!ok) {
+                messagesArea.setToolOutcome(card, browser.i18n.getMessage('sp_declined'));
+                results.push({ tool_call_id: call.id, content: JSON.stringify({ cancelled: true, reason: 'The user declined this change.' }) });
+                continue;
+            }
+            try {
+                const result = await runSpTool(call.name, args);
+                messagesArea.setToolOutcome(card, browser.i18n.getMessage('sp_done_ok'));
+                results.push({ tool_call_id: call.id, content: JSON.stringify(result) });
+            } catch (e) {
+                messagesArea.setToolOutcome(card, browser.i18n.getMessage('sp_tool_failed', [e.message]), true);
+                results.push({ tool_call_id: call.id, content: JSON.stringify({ error: e.message }) });
+            }
+        } else {
+            const note = messagesArea.appendToolNote('🔎 ' + describeSpTool(call.name, args));
+            try {
+                const result = await runSpTool(call.name, args);
+                results.push({ tool_call_id: call.id, content: JSON.stringify(result) });
+            } catch (e) {
+                note.textContent += ' — ' + browser.i18n.getMessage('sp_tool_failed', [e.message]);
+                results.push({ tool_call_id: call.id, content: JSON.stringify({ error: e.message }) });
+            }
+        }
+    }
+    worker.postMessage({ type: 'toolResults', results });
+}
 
 // handling commands from the backgound page
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {

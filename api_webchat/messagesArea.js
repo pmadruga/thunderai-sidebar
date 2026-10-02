@@ -850,6 +850,130 @@ class MessagesArea extends HTMLElement {
         this.accumulatingMessageEl = null;
     }
 
+    // ── Tools (ThunderAI Side Panel fork: Super Productivity) ─────────────
+    // A quiet note for a tool that ran, and a confirmation card for one that
+    // would change data. Both end the current model turn, so the model's
+    // follow-up answer opens a fresh turn below them.
+
+    _ensureToolStyles() {
+        if (this.shadowRoot.getElementById('tool-styles')) return;
+        const style = document.createElement('style');
+        style.id = 'tool-styles';
+        style.textContent = `
+            .tool-note {
+                font-size: .8125rem;
+                color: var(--ink-3);
+                padding: 2px 4px;
+            }
+            .tool-card {
+                border: 1px solid var(--border);
+                border-radius: var(--r-md);
+                background: var(--surface);
+                padding: 10px 12px;
+                font-size: .875rem;
+                color: var(--ink);
+            }
+            .tool-card .tool-actions {
+                display: flex;
+                gap: 8px;
+                margin-top: 8px;
+            }
+            .tool-card button {
+                border-radius: var(--r-sm);
+                padding: 5px 12px;
+                font: inherit;
+                font-size: .8125rem;
+                cursor: pointer;
+            }
+            .tool-card .tool-confirm {
+                border: 1px solid transparent;
+                background: var(--accent);
+                color: #fff;
+            }
+            .tool-card .tool-cancel {
+                border: 1px solid var(--border);
+                background: transparent;
+                color: var(--ink-2);
+            }
+            .tool-card .tool-outcome {
+                margin-top: 6px;
+                font-size: .8125rem;
+                color: var(--ink-2);
+            }
+            .tool-card .tool-outcome.error {
+                color: var(--err-ink);
+            }
+        `;
+        this.shadowRoot.appendChild(style);
+    }
+
+    _endModelTurnForTool() {
+        this.fullTextHTML = "";
+        this._streaming = null;
+        this._removeThinkingIndicator();
+        // A turn that was only a tool call has nothing but the model's name in
+        // it; drop it rather than leave an empty header above the tool note.
+        const body = this._currentTurnEl?.querySelector('.turn-body');
+        if (body && !body.querySelector('details') &&
+            [...body.children].every(el => el.classList.contains('turn-name') || !el.textContent.trim())) {
+            this._currentTurnEl.remove();
+        }
+        this._currentTurnEl = null;
+    }
+
+    appendToolNote(text) {
+        this._ensureToolStyles();
+        this._endModelTurnForTool();
+        const turn = this._beginUserTurn('info');
+        const note = document.createElement('div');
+        note.className = 'tool-note';
+        note.textContent = text;
+        turn.appendChild(note);
+        return note;
+    }
+
+    /** Shows a confirmation card; resolves true (confirm) or false (cancel). */
+    appendConfirmCard(text, confirmLabel, cancelLabel) {
+        this._ensureToolStyles();
+        this._endModelTurnForTool();
+        const turn = this._beginUserTurn('info');
+        const card = document.createElement('div');
+        card.className = 'tool-card';
+        card.setAttribute('role', 'group');
+        const label = document.createElement('div');
+        label.textContent = text;
+        const actions = document.createElement('div');
+        actions.className = 'tool-actions';
+        const confirm = document.createElement('button');
+        confirm.type = 'button';
+        confirm.className = 'tool-confirm';
+        confirm.textContent = confirmLabel;
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'tool-cancel';
+        cancel.textContent = cancelLabel;
+        actions.append(confirm, cancel);
+        card.append(label, actions);
+        turn.appendChild(card);
+        confirm.focus();
+        return new Promise(resolve => {
+            const finish = (ok) => {
+                actions.remove();
+                resolve(ok);
+            };
+            confirm.addEventListener('click', () => finish(true), { once: true });
+            cancel.addEventListener('click', () => finish(false), { once: true });
+        }).then(ok => ({ ok, card }));
+    }
+
+    /** Adds the outcome line under a confirmation card. */
+    setToolOutcome(card, text, isError = false) {
+        const outcome = document.createElement('div');
+        outcome.className = 'tool-outcome' + (isError ? ' error' : '');
+        outcome.textContent = text;
+        card.appendChild(outcome);
+    }
+
     appendUserMessage(messageText, type="user") {
         this.fullTextHTML = "";
         this._streaming = null;   // new turn: reset any streaming state
