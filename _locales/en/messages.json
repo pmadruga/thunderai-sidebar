@@ -2793,6 +2793,18 @@
     "message": "Left",
     "description": ""
   },
+  "chat_with_ai": {
+    "message": "Chat with AI",
+    "description": "Label of the message header button that opens the side panel chat about the displayed email."
+  },
+  "chat_panel_actions": {
+    "message": "Actions…",
+    "description": "Placeholder of the side panel's prompts dropdown."
+  },
+  "chat_panel_actions_label": {
+    "message": "Run a ThunderAI prompt on this email",
+    "description": "Accessible label/tooltip of the side panel's prompts dropdown."
+  },
   "prompt_chat_email": {
     "message": "Chat about this email",
     "description": "Popup menu entry that opens the chat with the selected email(s) as context, without sending a prompt."

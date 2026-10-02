@@ -177,6 +177,12 @@ messenger.commands.onCommand.addListener((command, tab) => {
     }
 });
     
+// "Chat with AI" button in the message header: open the side panel chat
+// about the displayed email(s) (no popup menu in the side panel fork).
+browser.messageDisplayAction.onClicked.addListener((tab) => {
+    openEmailChat(tab.id);
+});
+
 async function handleShortcut(tab) {
     taLog.log("Shortcut triggered!");
     if(!["mail", "messageCompose","messageDisplay"].includes(tab.type)){
@@ -185,7 +191,7 @@ async function handleShortcut(tab) {
     switch (tab.type) {
         case "mail":
         case "messageDisplay":
-            browser.messageDisplayAction.openPopup();
+            openEmailChat(tab.id);
             break;
         case "messageCompose":
             browser.composeAction.openPopup();
@@ -435,12 +441,10 @@ messenger.runtime.onMessage.addListener((message, sender, sendResponse) => {
                             return;
                         }
 
-                        // Manual button mode (summarize_auto === 1)
-                        if (prefs.summarize_display_mode === 'inline') {
-                            await _sendIfCurrent(tabId, message.headerMessageId, { command: "showSummaryButton", headerMessageId: message.headerMessageId });
-                        } else {
-                            await _sendIfCurrent(tabId, message.headerMessageId, { command: "showSummaryButton", headerMessageId: message.headerMessageId, webchat: true });
-                        }
+                        // Manual button mode (summarize_auto === 1): the side panel fork shows
+                        // no "AI Summary" button on emails; summaries are one click away in
+                        // the side panel's actions menu instead.
+                        return;
                     } catch (e) {
                         taLog.error("Error in initSummary: " + e);
                     }

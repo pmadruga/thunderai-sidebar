@@ -346,7 +346,8 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (mztaInPanel) {
                 const title = document.getElementById('appHeaderName');
                 title.textContent = subject;
-                title.title = subject;
+                const modelName = document.getElementById('appHeaderModel')?.textContent;
+                title.title = modelName ? `${subject} — ${modelName}` : subject;
             }
             const escape = (text) => String(text).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
             const notice = count > 1

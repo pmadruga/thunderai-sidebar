@@ -62,3 +62,16 @@ them onto the page's design tokens (`--bg`, `--ink`, `--accent`, `--font`, …).
 The panel hides the provider pill and the connection debug note, shows the
 email subject (chat mode) and the model's short name in the header, replaces
 the per-answer Close button with a header ✕, and uses a thin themed scrollbar.
+
+## Header button and actions menu
+
+- The message header button is "Chat with AI" (`message_display_action`
+  without a popup): `onClicked` and the `_thunderai__do_action` shortcut call
+  `openEmailChat()` directly. The compose window keeps its popup menu.
+- The panel header has an "Actions…" `<select>` (`panel-theme.js`,
+  `addActionsMenu()`), filled from `popup_menu_ready`: every reading prompt not
+  hidden everywhere (`show_in !== 'none'`), including context-menu ones such as
+  Summarize/Translate, in popup order. Choosing one sends `shortcut_do_prompt`
+  for the mail tab, which reloads the panel with that prompt.
+- No "AI Summary" button is drawn on emails: the manual summary mode
+  (`summarize_auto === 1`) returns early. Automatic summaries are unchanged.

@@ -54,6 +54,67 @@ async function applyTheme(root) {
     }
 }
 
+// Prompts dropdown: the ThunderAI prompts that used to live in the header
+// button's popup menu, run on the email shown in the main window.
+async function addActionsMenu() {
+    const header = document.getElementById('appHeader');
+    if (!header || document.getElementById('appHeaderActions')) {
+        return;
+    }
+    let menu;
+    try {
+        menu = await browser.runtime.sendMessage({ command: 'popup_menu_ready' });
+    } catch (e) {
+        console.error('[ThunderAI] Could not load the prompts list:', e);
+        return;
+    }
+    if (!menu || !Array.isArray(menu.lastShortcutPromptsData)) {
+        return;
+    }
+    // Reading prompts, in the popup menu's order. The panel replaces both the
+    // popup and the right-click menu, so context-menu prompts (Summarize,
+    // Translate, …) are included; only prompts hidden everywhere are left out.
+    const allowedTypes = menu.lastShortcutFiltering === 2 ? ['0', '2'] : ['0', '1'];
+    const prompts = menu.lastShortcutPromptsData
+        .filter(p => p && p.id !== 'prompt_chat_email')
+        .filter(p => (p.show_in || 'popup') !== 'none')
+        .filter(p => allowedTypes.includes(String(p.type)))
+        .sort((a, b) => (a.position_display || 9999) - (b.position_display || 9999));
+    if (prompts.length === 0) {
+        return;
+    }
+
+    const select = document.createElement('select');
+    select.id = 'appHeaderActions';
+    select.title = browser.i18n.getMessage('chat_panel_actions_label');
+    select.setAttribute('aria-label', browser.i18n.getMessage('chat_panel_actions_label'));
+    const placeholder = new Option(browser.i18n.getMessage('chat_panel_actions'), '');
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    select.add(placeholder);
+    for (const prompt of prompts) {
+        select.add(new Option(prompt.label, prompt.id));
+    }
+    select.addEventListener('change', () => {
+        const promptId = select.value;
+        select.selectedIndex = 0;
+        if (promptId) {
+            browser.runtime.sendMessage({ command: 'shortcut_do_prompt', tabId: menu.lastShortcutTabId, promptId });
+        }
+    });
+    header.insertBefore(select, document.getElementById('appHeaderClose'));
+
+    // Make room for the subject: the model name moves to the title's tooltip.
+    const model = document.getElementById('appHeaderModel');
+    const title = document.getElementById('appHeaderName');
+    if (model && title) {
+        model.hidden = true;
+        if (model.textContent) {
+            title.title = `${title.textContent} — ${model.textContent}`;
+        }
+    }
+}
+
 function addCloseButton() {
     const header = document.getElementById('appHeader');
     if (!header || document.getElementById('appHeaderClose')) {
@@ -82,9 +143,13 @@ if (inPanel) {
     } finally {
         root.classList.add('theme-ready');
     }
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', addCloseButton, { once: true });
-    } else {
+    const setUpHeader = () => {
         addCloseButton();
+        addActionsMenu();
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setUpHeader, { once: true });
+    } else {
+        setUpHeader();
     }
 }

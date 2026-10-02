@@ -350,3 +350,37 @@ p {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
 }
+
+/* Prompts dropdown in the side panel header */
+#appHeaderActions {
+    flex: none;
+    max-width: 8.5rem;
+    height: 28px;
+    padding: 0 26px 0 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    background-color: var(--surface);
+    color: var(--ink-2);
+    font: inherit;
+    font-size: .8125rem;
+    cursor: pointer;
+}
+
+#appHeaderActions:hover {
+    background-color: var(--hover);
+    color: var(--ink);
+}
+
+#appHeaderActions:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+#appHeaderActions option {
+    background-color: var(--bg);
+    color: var(--ink);
+}
+
+:root.in-panel #appHeaderModel[hidden] {
+    display: none !important;
+}
