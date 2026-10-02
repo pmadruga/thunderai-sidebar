@@ -51,6 +51,20 @@ messagesInputStyle.textContent = SHARED_BASE_CSS + `
         background: var(--accent-soft);
     }
 
+    /* Context meter (ThunderAI Side Panel fork): used / total tokens */
+    #contextMeter {
+        flex-basis: 100%;
+        order: 99;
+        margin: -4px 2px -8px 0;
+        text-align: right;
+        font-size: .75rem;
+        color: var(--ink-3);
+        font-variant-numeric: tabular-nums;
+    }
+    #contextMeter[hidden] {
+        display: none;
+    }
+
     /* Document attachments (ThunderAI Side Panel fork) */
     #attachButton {
         display: flex;
@@ -451,6 +465,11 @@ const spSvg = new DOMParser().parseFromString('<svg xmlns="http://www.w3.org/200
 spToggle.appendChild(document.importNode(spSvg, true));
 messageInputTemplate.content.appendChild(spToggle);
 
+const contextMeter = document.createElement('div');
+contextMeter.id = 'contextMeter';
+contextMeter.hidden = true;
+messageInputTemplate.content.appendChild(contextMeter);
+
 const spSetup = document.createElement('div');
 spSetup.id = 'spSetup';
 messageInputTemplate.content.appendChild(spSetup);
@@ -540,6 +559,7 @@ class MessageInput extends HTMLElement {
 
         // Super Productivity toggle
         this._spToggle = shadowRoot.querySelector('#spToggle');
+        this._contextMeter = shadowRoot.querySelector('#contextMeter');
         this._spSetup = shadowRoot.querySelector('#spSetup');
         this._spToggle.addEventListener('click', () => this._toggleSuperProductivity());
 
@@ -595,6 +615,28 @@ class MessageInput extends HTMLElement {
     async init(worker) {
         this.worker = worker;
         this._initSuperProductivity();
+    }
+
+    // ── Context meter (ThunderAI Side Panel fork) ───────────────────────────
+
+    /** Shows "used / total" tokens; total is null when the server doesn't say. */
+    setContextUsage(used, size) {
+        const short = n => n < 1000 ? String(n)
+            : n < 100000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+            : Math.round(n / 1000) + 'k';
+        const meter = this._contextMeter;
+        if (size) {
+            meter.textContent = `${short(used)} / ${short(size)}`;
+            meter.title = browser.i18n.getMessage('context_meter_title',
+                [used.toLocaleString(), size.toLocaleString(), String(Math.round(used / size * 100))]);
+        } else if (used) {
+            meter.textContent = browser.i18n.getMessage('context_meter_tokens', [short(used)]);
+            meter.title = '';
+        } else {
+            meter.hidden = true;
+            return;
+        }
+        meter.hidden = false;
     }
 
     // ── Super Productivity (ThunderAI Side Panel fork) ──────────────────────

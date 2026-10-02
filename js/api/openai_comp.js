@@ -84,6 +84,22 @@ export class OpenAIComp {
     return output;
   }
 
+  // Context window size, from llama.cpp's /props (ThunderAI Side Panel fork).
+  // Other servers don't report it: resolves to null.
+  fetchContextSize = async () => {
+    try {
+      const headers = {};
+      if(this.apiKey !== '') headers["Authorization"] = "Bearer "+ this.apiKey;
+      const response = await fetch(this.host.replace(/\/v1$/, '') + "/props", { headers });
+      if (!response.ok) return null;
+      const props = await response.json();
+      const nCtx = props?.default_generation_settings?.n_ctx ?? props?.n_ctx;
+      return Number.isFinite(nCtx) && nCtx > 0 ? nCtx : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   fetchResponse = async (messages, maxTokens = 0, tools = null) => {
     try{
       const tempFloat = parseFloat(this.temperature);
@@ -104,6 +120,8 @@ export class OpenAIComp {
                 model: this.model,
                 messages: messages,
                 stream: this.stream,
+                // Token usage in the last chunk (ThunderAI Side Panel fork: context meter)
+                ...(this.stream ? { stream_options: { include_usage: true } } : {}),
                 ...(maxTokens > 0 ? { 'max_tokens': parseInt(maxTokens) } : {}),
                 ...(this.temperature != '' && !Number.isNaN(tempFloat) ? { 'temperature': tempFloat } : {}),
                 // Function tools (ThunderAI Side Panel fork: Super Productivity)

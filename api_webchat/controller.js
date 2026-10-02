@@ -327,6 +327,9 @@ worker.onmessage = async function(event) {
         case 'toolCalls':
             await handleToolCalls(payload.calls);
             break;
+        case 'usage':
+            messageInput.setContextUsage(payload.used, payload.size);
+            break;
         case 'error':
             messagesArea.appendBotMessage(payload,'error');
             messageInput.enableInput(false);

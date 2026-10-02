@@ -36,6 +36,10 @@ let tools = null;
 let toolCallsAccumulator = [];
 let assistantResponseAccumulator = '';
 let thinkingAccumulator = '';
+// Context meter (ThunderAI Side Panel fork): window size from the server, and
+// the tokens the latest request used (prompt + answer), from its usage chunk.
+let contextSize = null;
+let lastUsage = null;
 
 // Reasoning field names used by the various OpenAI-compatible servers, in priority
 // order: reasoning_content (DeepSeek, vLLM, SGLang), reasoning (OpenRouter, which
@@ -72,6 +76,8 @@ self.onmessage = async function(event) {
         do_debug = event.data.do_debug;
         i18nStrings = event.data.i18nStrings;
         taLog = new taLogger('model-worker-openai_comp', do_debug);
+        contextSize = await openai_comp.fetchContextSize();
+        postMessage({ type: 'usage', payload: { used: 0, size: contextSize } });
     } else if (event.data.type === 'setTools') {
         tools = Array.isArray(event.data.tools) && event.data.tools.length > 0 ? event.data.tools : null;
     } else if (event.data.type === 'toolResults') {
@@ -93,6 +99,7 @@ self.onmessage = async function(event) {
 // calls to the page (which answers with 'toolResults') instead of finishing.
 async function streamTurn() {
     toolCallsAccumulator = [];
+    lastUsage = null;
     const response = await openai_comp.fetchResponse(conversationHistory, 0, tools); //4096);
 
         if (!response.ok) {
@@ -137,6 +144,9 @@ async function streamTurn() {
             }
             const { done, value } = await reader.read();
             if (done) {
+                if (lastUsage) {
+                    postMessage({ type: 'usage', payload: { used: lastUsage, size: contextSize } });
+                }
                 taLog.log("AI full reasoning: " + thinkingAccumulator);
                 taLog.log("AI full response: " + assistantResponseAccumulator);
                 const calls = toolCallsAccumulator.filter(Boolean).map((c, i) => ({ ...c, id: c.id || ('call_' + Date.now() + '_' + i) }));
@@ -193,6 +203,10 @@ async function streamTurn() {
     
             for (const parsedLine of parsedLines) {
                 const { choices } = parsedLine;
+                if (parsedLine.usage) {
+                    const u = parsedLine.usage;
+                    lastUsage = u.total_tokens ?? ((u.prompt_tokens || 0) + (u.completion_tokens || 0));
+                }
                 if (!choices || choices.length === 0) {
                     // Debug-gated, unlike most warn() calls: a frame without choices is
                     // routine here (keep-alives and usage-only frames are what plenty of

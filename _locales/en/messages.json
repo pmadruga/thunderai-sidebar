@@ -3525,5 +3525,21 @@
   "editor_placeholder_unterminated": {
     "message": "Unterminated placeholder: missing the closing %}",
     "description": "Tooltip on a highlighted placeholder token in the prompt editor when the token opens with {% but never closes with %}"
+  },
+  "context_meter_title": {
+    "message": "Context window: $USED$ of $SIZE$ tokens used ($PCT$%)",
+    "description": "Tooltip on the used / total context meter under the chat input (Side Panel fork)",
+    "placeholders": {
+      "used": { "content": "$1" },
+      "size": { "content": "$2" },
+      "pct": { "content": "$3" }
+    }
+  },
+  "context_meter_tokens": {
+    "message": "$USED$ tokens",
+    "description": "Context meter when the server doesn't report its context size (Side Panel fork)",
+    "placeholders": {
+      "used": { "content": "$1" }
+    }
   }
 }

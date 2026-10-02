@@ -130,3 +130,14 @@ posts `toolCalls` instead of `tokensDone`. The controller runs them and posts
 projects, tags, current task) run directly and leave a "🔎" note. Writes
 (create, update, start, stop tracking) show a confirmation card first; Cancel
 returns `{cancelled: true}` to the model. There is no delete tool.
+
+## Context meter
+
+Under the chat input, a small "used / total" token count (e.g. `12.4k / 131k`,
+full numbers and percentage in the tooltip). The OpenAI-compatible worker asks
+for `stream_options.include_usage` and posts a `usage` message after each
+answer with `total_tokens` of the latest request, i.e. how much of the window
+the conversation fills now. The total comes once per chat from llama.cpp's
+`/props` (`default_generation_settings.n_ctx`); servers without it show just
+the used count. Other connections don't report usage, so the meter stays
+hidden.
