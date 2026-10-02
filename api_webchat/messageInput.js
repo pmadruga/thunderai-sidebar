@@ -22,7 +22,11 @@
 
 import { buildSendIcon, buildStopIcon, buildCheckIcon, buildAlertIcon } from './svgIcons.js';
 import { SHARED_BASE_CSS } from './sharedStyles.js';
-import { extractDocumentText, UnsupportedDocumentError } from './attachments.js';
+import { extractDocumentText, isSupportedDocument, UnsupportedDocumentError } from './attachments.js';
+
+// Email attachments added to an email chat on their own (more can be added by hand).
+const MAX_EMAIL_ATTACHMENTS = 5;
+const MAX_EMAIL_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 import { getSpSettings, saveSpSettings, verifySpConnection, spToolDefinitions, spOriginPattern } from './superproductivity.js';
 
 // Tools need the OpenAI-compatible connection (the only worker with tool calls).
@@ -992,6 +996,33 @@ class MessageInput extends HTMLElement {
                 console.error('[ThunderAI] Could not read attachment', file.name, e);
             }
             this._renderAttachments();
+        }
+    }
+
+    /**
+     * Chat about an email: attach the emails' readable attachments to the
+     * first message, as removable chips. A file sent again later in the
+     * thread (same name and size) is added once.
+     */
+    async addEmailAttachments(list) {
+        if (!Array.isArray(list)) return;
+        const seen = new Set();
+        const wanted = [];
+        for (const a of list) {
+            const key = a.name + '|' + a.size;
+            if (seen.has(key) || !isSupportedDocument(a.name || '', (a.contentType || '').toLowerCase()) ||
+                a.size > MAX_EMAIL_ATTACHMENT_BYTES) continue;
+            seen.add(key);
+            wanted.push(a);
+        }
+        // Newest first: the latest version of a document is the one that matters.
+        for (const a of wanted.reverse().slice(0, MAX_EMAIL_ATTACHMENTS)) {
+            try {
+                const file = await browser.messages.getAttachmentFile(a.messageId, a.partName);
+                await this._addAttachments([new File([file], a.name, { type: file.type || a.contentType })]);
+            } catch (e) {
+                console.error('[ThunderAI] Could not open email attachment', a.name, e);
+            }
         }
     }
 

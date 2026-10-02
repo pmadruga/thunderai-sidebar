@@ -2010,6 +2010,9 @@ async function openEmailChat(tabId, selectedMessages = null) {
 
     const me = await getMyIdentities(messages);
     const blocks = [];
+    // The emails' attachments: named in the context, and handed to the chat
+    // page, which reads the supported ones (PDF, .docx, text) as documents.
+    const attachments = [];
     for (const [i, msg] of messages.entries()) {
         let body = '';
         try {
@@ -2017,14 +2020,24 @@ async function openEmailChat(tabId, selectedMessages = null) {
         } catch (e) {
             taLog.error("[ThunderAI] Chat about email: could not read message " + msg.id + ": " + e);
         }
+        let files = [];
+        try {
+            files = (await browser.messages.listAttachments(msg.id)).filter(a => !a.message);
+        } catch (e) {
+            taLog.error("[ThunderAI] Chat about email: could not list attachments of " + msg.id + ": " + e);
+        }
+        for (const a of files) {
+            attachments.push({ messageId: msg.id, partName: a.partName, name: a.name, size: a.size, contentType: a.contentType });
+        }
         blocks.push(
             `=== Email ${i + 1} of ${messages.length} ===\n` +
             `From: ${msg.author}${me.emails.has(authorAddress(msg.author)) ? ' (me)' : ''}\n` +
             `To: ${(msg.recipients || []).join(', ')}\n` +
             (msg.ccList?.length ? `Cc: ${msg.ccList.join(', ')}\n` : '') +
             `Date: ${new Date(msg.date).toLocaleString()}\n` +
-            `Subject: ${msg.subject}\n\n` +
-            body
+            `Subject: ${msg.subject}\n` +
+            (files.length ? `Attachments: ${files.map(a => a.name).join(', ')}\n` : '') +
+            `\n` + body
         );
     }
     // Tell the model who "I" am, so drafted replies are written from the user.
@@ -2048,6 +2061,7 @@ async function openEmailChat(tabId, selectedMessages = null) {
         chat_mode: true,
         chat_subject: subject,
         chat_count: messages.length,
+        chat_attachments: attachments,
     });
 }
 

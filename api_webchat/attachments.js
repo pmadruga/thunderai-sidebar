@@ -37,6 +37,13 @@ function extensionOf(name) {
     return dot >= 0 ? name.slice(dot + 1).toLowerCase() : '';
 }
 
+/** Whether extractDocumentText can read a file with this name and type. */
+export function isSupportedDocument(name, type = '') {
+    const ext = extensionOf(name);
+    return ext === 'pdf' || type === 'application/pdf' || ext === 'docx' ||
+        TEXT_EXTENSIONS.has(ext) || type.startsWith('text/') || type === 'application/json';
+}
+
 /**
  * @param {File} file
  * @returns {Promise<{name: string, text: string, truncated: boolean}>}

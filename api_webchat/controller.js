@@ -412,6 +412,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 : browser.i18n.getMessage('chat_email_notice_one', [escape(subject)]);
             messagesArea.appendUserMessage(notice, "info");
             messageInput.setPendingContext(message.prompt);
+            messageInput.addEmailAttachments(info.chat_attachments);
             break;
         }
         case "api_send":

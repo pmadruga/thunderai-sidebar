@@ -141,3 +141,15 @@ the conversation fills now. The total comes once per chat from llama.cpp's
 `/props` (`default_generation_settings.n_ctx`); servers without it show just
 the used count. Other connections don't report usage, so the meter stays
 hidden.
+
+## Email attachments
+
+`openEmailChat()` lists each email's attachments (`messages.listAttachments`,
+skipping attached emails). Their names go into that email's block of the
+context ("Attachments: …"), and the list goes to the page as
+`prompt_info.chat_attachments`. The page (`messageInput.addEmailAttachments`)
+keeps the ones `isSupportedDocument()` can read (PDF, .docx, text), at most
+25 MB each, the same name and size only once, newest first, at most five.
+It opens them with `messages.getAttachmentFile()` and adds them as normal
+document chips, so they ride along with the first message and the user can
+remove any before sending.
