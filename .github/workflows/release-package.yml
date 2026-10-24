@@ -1,7 +1,7 @@
 name: Build tagged package
 on:
   push:
-    tags: ['v*']
+    tags: ['sidebar-v*']
   workflow_dispatch:
 permissions:
   contents: read

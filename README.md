@@ -38,7 +38,7 @@ python3 scripts/check_repository.py
 
 The default build is a development package. It uses the explicit file inventory in `release-files.txt`, filters locales through `LANG.md`, rejects symlinks, and produces a SHA-256 sidecar. It does not silently include other files from your workspace.
 
-For a distributable release, commit the complete source, tag it `v5.1.0` (matching the manifest), then run:
+For a distributable release, commit the complete source, tag it `sidebar-v5.1.0` (matching the manifest), then run:
 
 ```sh
 ./build-side-panel.sh --release

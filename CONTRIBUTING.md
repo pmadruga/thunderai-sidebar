@@ -53,7 +53,7 @@ The installer pins Gitleaks 8.30.1 and checks the official release archive's SHA
 1. Complete source review, the automated checks, the redacted history scan and the relevant Thunderbird smoke tests.
 2. Update `manifest.json`, the dated `FORK_CHANGELOG.md` entry and public documentation. The extension ID belongs to this fork and must remain stable after publication.
 3. Commit all intended files. The source commit must contain everything in the package inventory.
-4. Tag that commit `v<manifest version>`. Do not tag a dirty or partially committed workspace.
+4. Tag that commit `sidebar-v<manifest version>`. Do not tag a dirty or partially committed workspace.
 5. Run `./build-side-panel.sh --release`. It requires a clean working tree and the matching version tag at HEAD. A tagged CI run performs the same checks and uploads a short-lived workflow artifact; it does not automatically publish a GitHub release.
 6. Compare the XPI checksum from two builds of that source. The archive uses sorted entries, fixed timestamps and permissions, and stored entries without compressor-dependent output.
 7. Publish the reviewed XPI and `.sha256` alongside the matching source tag. Include tested Thunderbird/OS combinations, migration limits, privileged-access disclosure, known limitations and rollback instructions.

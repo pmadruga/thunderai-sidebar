@@ -65,10 +65,10 @@ class ReleasePackageTests(unittest.TestCase):
         with patch.object(packager, 'git', return_value=' M manifest.json'):
             with self.assertRaisesRegex(ValueError, 'clean committed'):
                 packager.build(self.root, release=True)
-        with patch.object(packager, 'git', side_effect=['', 'v0.0.1']):
+        with patch.object(packager, 'git', side_effect=['', 'v1.2.3']):
             with self.assertRaisesRegex(ValueError, 'v1.2.3'):
                 packager.build(self.root, release=True)
-        with patch.object(packager, 'git', side_effect=['', 'v1.2.3', '\n'.join(self.files)]):
+        with patch.object(packager, 'git', side_effect=['', 'sidebar-v1.2.3', '\n'.join(self.files)]):
             self.assertTrue(packager.build(self.root, release=True).is_file())
 
 

@@ -49,8 +49,8 @@ def build(root, output=None, release=False):
         if git(root, 'status', '--porcelain', '--untracked-files=all'):
             raise ValueError('Release build requires a clean committed working tree')
         tags = git(root, 'tag', '--points-at', 'HEAD').splitlines()
-        if f'v{version}' not in tags:
-            raise ValueError(f'Release build requires tag v{version} at HEAD')
+        if f'sidebar-v{version}' not in tags:
+            raise ValueError(f'Release build requires tag sidebar-v{version} at HEAD')
         tracked = set(git(root, 'ls-files').splitlines())
         missing = set(names) - tracked
         if missing:
