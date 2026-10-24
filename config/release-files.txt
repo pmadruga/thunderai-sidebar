@@ -1,13 +1,13 @@
-# Locale directories must also appear in LANG.md.
+# Locale directories must also appear in config/locales.txt.
 # Reviewed runtime and notice files. Add new runtime modules explicitly.
-FORK_CHANGELOG.md
+docs/FORK_CHANGELOG.md
 LICENSE
-PRIVACY.md
+docs/PRIVACY.md
 README.md
-SECURITY.md
-THIRD_PARTY_NOTICES.md
-UPSTREAM.md
-VENDORS.md
+docs/SECURITY.md
+docs/THIRD_PARTY_NOTICES.md
+docs/UPSTREAM.md
+docs/VENDORS.md
 _locales/cs/messages.json
 _locales/de/messages.json
 _locales/el/messages.json
@@ -234,6 +234,6 @@ pages/translate/mzta-translate.js
 popup/mzta-popup.css
 popup/mzta-popup.html
 popup/mzta-popup.js
-scripts/vendor-lock.json
+config/vendor-lock.json
 js/api/provider-config.js
 js/workers/worker-runtime.js

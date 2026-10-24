@@ -30,8 +30,8 @@ jobs:
         run: python3 scripts/check_repository.py
       - name: Verify deterministic development package
         run: |
-          ./build-side-panel.sh --output /tmp/first.xpi
-          ./build-side-panel.sh --output /tmp/second.xpi
+          ./scripts/build.sh --output /tmp/first.xpi
+          ./scripts/build.sh --output /tmp/second.xpi
           cmp /tmp/first.xpi /tmp/second.xpi
   secrets:
     runs-on: ubuntu-latest

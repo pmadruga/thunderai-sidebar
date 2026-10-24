@@ -1,6 +1,6 @@
 # Upstream credits
 
-ThunderAI Side Panel is derived from [ThunderAI by Mic](https://github.com/micz/ThunderAI). Original Git history and [CHANGELOG.md](CHANGELOG.md) are retained. The following original contributor and artwork credits are preserved from the upstream README. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for bundled software licenses. Fork support and installation instructions are in [README.md](README.md).
+ThunderAI Side Panel is derived from [ThunderAI by Mic](https://github.com/micz/ThunderAI). Original Git history and [CHANGELOG.md](CHANGELOG.md) are retained. The following original contributor and artwork credits are preserved from the upstream README. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for bundled software licenses. Fork support and installation instructions are in [README.md](../README.md).
 
 <h2 style="display:inline">Attributions</h2>
 

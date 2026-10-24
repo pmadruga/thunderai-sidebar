@@ -6,7 +6,7 @@ body:
       value: |
         This tracker is for the independent Side Panel fork. Use synthetic email for reproduction.
         Do not attach a Thunderbird profile, API keys, settings exports, real email content, or unredacted logs.
-        For a security vulnerability, follow [SECURITY.md](https://github.com/pmadruga/thunderai-sidebar/blob/main/SECURITY.md).
+        For a security vulnerability, follow [docs/SECURITY.md](https://github.com/pmadruga/thunderai-sidebar/blob/main/SECURITY.md).
   - type: input
     id: version
     attributes:

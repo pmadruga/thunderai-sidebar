@@ -234,7 +234,7 @@ export async function getMailSubject(tab){
 // no messageId threading for the getAttachmentFile() recovery, and no reliance on
 // part.body being populated (documented as present only when getFull() is asked
 // for it) - three things the old path got wrong on the automatic paths, where the
-// messageId was never passed. See claude-spec/01-architecture.md.
+// messageId was never passed. See docs/specs/01-architecture.md.
 //
 // Encryption: the API decrypts by default and omits the parts it cannot decrypt.
 // No distinction is lost - the old walk never read part.decryptionStatus either.

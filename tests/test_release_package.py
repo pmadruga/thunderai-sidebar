@@ -16,20 +16,21 @@ class ReleasePackageTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        self.files = ['manifest.json', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'PRIVACY.md', '_locales/en/messages.json']
+        self.files = ['manifest.json', 'LICENSE', 'docs/THIRD_PARTY_NOTICES.md', 'docs/PRIVACY.md', '_locales/en/messages.json']
         for name in self.files:
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('content')
         (self.root / 'manifest.json').write_text(json.dumps({'version': '1.2.3'}))
-        (self.root / 'LANG.md').write_text('en\n')
+        (self.root / 'config').mkdir(exist_ok=True)
+        (self.root / 'config/locales.txt').write_text('en\n')
         self.inventory(self.files)
 
     def tearDown(self):
         self.temp.cleanup()
 
     def inventory(self, names):
-        (self.root / 'release-files.txt').write_text('\n'.join(names) + '\n')
+        (self.root / 'config/release-files.txt').write_text('\n'.join(names) + '\n')
 
     def test_deterministic_archive_excludes_unlisted_private_files(self):
         (self.root / 'private-export.json').write_text('synthetic private data')

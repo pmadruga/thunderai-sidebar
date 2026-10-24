@@ -1,4 +1,4 @@
- # ![ThunderAI icon](images/icon-32px.png "ThunderAI") ThunderAI Release Notes
+ # ![ThunderAI icon](../images/icon-32px.png "ThunderAI") ThunderAI Release Notes
 
 
 <h2>Version 5.0.1 - 16/09/2026</h2>

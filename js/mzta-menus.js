@@ -136,7 +136,7 @@ export class mzta_Menus {
 
         // The selection twins, derived from ONE normalization so selected_text and
         // selected_html AGREE - the diff picker's original side depends on the pair
-        // matching (see claude-spec/07-diff-picker.md). Computing them from two
+        // matching (see docs/specs/07-diff-picker.md). Computing them from two
         // independent inputs (selection.toString() vs cloneContents().innerHTML) let
         // them drift.
         //

@@ -15,9 +15,9 @@ def git(root, *args):
 
 
 def package_files(root):
-    locales = {line.strip() for line in (root / 'LANG.md').read_text().splitlines() if line.strip()}
+    locales = {line.strip() for line in (root / 'config/locales.txt').read_text().splitlines() if line.strip()}
     names = []
-    for line in (root / 'release-files.txt').read_text().splitlines():
+    for line in (root / 'config/release-files.txt').read_text().splitlines():
         name = line.strip()
         if not name or name.startswith('#'):
             continue
@@ -25,13 +25,13 @@ def package_files(root):
         if path.is_absolute() or '..' in path.parts or '\\' in name or name in names:
             raise ValueError(f'Invalid or duplicate package path: {name}')
         if path.parts[0] == '_locales' and (len(path.parts) < 3 or path.parts[1] not in locales):
-            raise ValueError(f'Locale is not approved in LANG.md: {name}')
+            raise ValueError(f'Locale is not approved in config/locales.txt: {name}')
         source = root / name
         if not source.is_file() or any(p.is_symlink() for p in [source, *source.parents] if p != root.parent):
             raise ValueError(f'Package source is missing or is a symlink: {name}')
         source.resolve().relative_to(root.resolve())
         names.append(name)
-    required = {'manifest.json', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'PRIVACY.md', '_locales/en/messages.json'}
+    required = {'manifest.json', 'LICENSE', 'docs/THIRD_PARTY_NOTICES.md', 'docs/PRIVACY.md', '_locales/en/messages.json'}
     if not required.issubset(names):
         raise ValueError('Package inventory is missing required manifest, policy, or license files')
     for locale in locales:

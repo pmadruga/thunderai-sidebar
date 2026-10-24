@@ -30,7 +30,7 @@ jobs:
           bash scripts/install-gitleaks.sh "$RUNNER_TEMP/gitleaks"
           python3 scripts/scan-secrets.py --binary "$RUNNER_TEMP/gitleaks/gitleaks"
       - name: Build clean tagged source
-        run: ./build-side-panel.sh --release
+        run: ./scripts/build.sh --release
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: thunderai-side-panel-xpi

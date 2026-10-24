@@ -2,6 +2,14 @@
 
 ThunderAI Side Panel uses native JavaScript modules. There is no runtime bundler or package manager. Keep Thunderbird entry-point paths stable so upstream changes remain straightforward to review.
 
+## Repository layout
+
+- Root: README, license, agent entry instructions, manifest and background entry points.
+- `docs/`: user policies, contribution guide, changelogs, attribution, screenshots and `specs/`.
+- `config/`: locale allowlist, explicit release inventory and vendor checksum lockfile.
+- `scripts/`: build launcher, packaging, validation and secret-scanning tools.
+- Runtime directories retain their established paths to keep extension imports stable.
+
 ## Where changes belong
 
 | Area | Location | Responsibility |
@@ -32,9 +40,9 @@ Chat pages send changed-turn patches to the background instead of writing saved 
 
 ## Tests and documentation
 
-Run the checks in [CONTRIBUTING.md](../CONTRIBUTING.md). `tests/worker-runtime.test.mjs` exercises all five entry points through the shared lifecycle; `tests/stream-transport.test.mjs` covers provider streaming behavior. Live tests under `tests/thunderbird/` use disposable profiles and local mock servers.
+Run the checks in [CONTRIBUTING.md](CONTRIBUTING.md). `tests/worker-runtime.test.mjs` exercises all five entry points through the shared lifecycle; `tests/stream-transport.test.mjs` covers provider streaming behavior. Live tests under `tests/thunderbird/` use disposable profiles and local mock servers.
 
-Detailed subsystem specifications remain in [claude-spec/](../claude-spec/). Add new runtime files to `release-files.txt`; documentation, screenshots and test fixtures stay outside the XPI.
+Detailed subsystem specifications remain in [docs/specs/](specs/). Add new runtime files to `config/release-files.txt`; screenshots, contributor guides and test fixtures stay outside the XPI; the required privacy and attribution notices are included.
 
 ## Reproduce README screenshots
 
@@ -48,4 +56,4 @@ for theme in light dark; do
 done
 ```
 
-For a native installation, replace `--flatpak` with `--binary /path/to/thunderbird`. Screenshot mode uses a fictional local inbox, a short email and fixed responses from a local mock provider. It enables the selected built-in Thunderbird theme, captures the full mail window and sidebar, then clicks “Use this answer” and captures the resulting unsent compose draft. Normal mode retains the large-email regression. Both modes exercise real sidebar rendering, encrypted restoration, continuation and deletion. No personal account or profile is used.
+For a native installation, replace `--flatpak` with `--binary /path/to/thunderbird`. Screenshot mode defaults to 2× pixel density, producing lossless 3000 × 2000 main-window PNGs and 2500 × 1800 compose PNGs. Use `--screenshot-scale 1` only for a quick low-density preview. It uses a fictional local inbox, a short email and fixed responses from a local mock provider. It enables the selected built-in Thunderbird theme, captures the full mail window and sidebar, then clicks “Use this answer” and captures the resulting unsent compose draft. Normal mode retains the large-email regression. Both modes exercise real sidebar rendering, encrypted restoration, continuation and deletion. No personal account or profile is used.

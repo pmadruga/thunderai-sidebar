@@ -177,7 +177,7 @@ its panel is always visible, so it prints `prefs_Connection_type_none` instead o
 | `chatgpt_web_custom_gpt` | `''` | Custom GPT URL |
 | `chatgpt_web_load_wait_time` | `1000` | Wait time (ms) for ChatGPT page |
 | `dynamic_menu_force_enter` | `false` | Force Enter to submit in popup |
-| `dynamic_menu_order_alphabet` | `true` | Internal migration flag only; no UI. **Not declared in `prefs_default`** — unlike every other preference, its default (`true`) is hardcoded in the `browser.storage.sync.get()` call in `js/mzta-prompts.js`, not in `options/mzta-options-default.js`. Set to `false` by `migrateMenuOrderAlphabetic()` on first boot after upgrade to bootstrap position-based ordering. See `claude-spec/02-prompts.md` for details. |
+| `dynamic_menu_order_alphabet` | `true` | Internal migration flag only; no UI. **Not declared in `prefs_default`** — unlike every other preference, its default (`true`) is hardcoded in the `browser.storage.sync.get()` call in `js/mzta-prompts.js`, not in `options/mzta-options-default.js`. Set to `false` by `migrateMenuOrderAlphabetic()` on first boot after upgrade to bootstrap position-based ordering. See `docs/specs/02-prompts.md` for details. |
 | `placeholders_use_default_value` | `false` | Use placeholder defaults when empty |
 | `hide_thinking` | `true` | Controls the initial state of the thinking `<details>` block prepended above the answer: `true` = collapsed by default, `false` = open by default. The user can always toggle with a click; thinking content is never discarded. |
 | `diff_granularity` | `'words'` | Comparison unit the proofreading change picker **opens with**: `'words'` or `'sentences'`. The picker's own toolbar toggle changes it for the current review; there is no per-prompt override — see [07-diff-picker.md](07-diff-picker.md). Rendered as a `<select>` in the advanced section; needs an explicit entry in `restoreOptions()`'s `select-one` branch, since a select restoring to `''` would render blank. |
@@ -350,7 +350,7 @@ The summarize settings page provides:
 
 ### Manage Custom Prompts Page (`pages/customprompts/`)
 
-The prompt CRUD screen: a single wide `<table class="prompts_list">` driven by List.js (columns ID, Name, Prompt Text, Menu, Properties, Actions), a hidden `#formNew` add-form, and Import/Export/Save All controls. Data model, storage routing, and the "Menu position" deep-link to the Menu Order page are documented in `claude-spec/02-prompts.md`.
+The prompt CRUD screen: a single wide `<table class="prompts_list">` driven by List.js (columns ID, Name, Prompt Text, Menu, Properties, Actions), a hidden `#formNew` add-form, and Import/Export/Save All controls. Data model, storage routing, and the "Menu position" deep-link to the Menu Order page are documented in `docs/specs/02-prompts.md`.
 
 **Visual layout (design "1b")** is purely presentational and driven by CSS design tokens in `mzta-custom-prompts.css`:
 
@@ -395,7 +395,7 @@ The prompt CRUD screen: a single wide `<table class="prompts_list">` driven by L
 
 ### Manage Data Placeholders Page (`pages/customdataplaceholders/`)
 
-The custom data placeholder CRUD screen — structurally the sibling of the Manage Custom Prompts page (List.js table, hidden `#formNew` add-form, Import/Export/Save All, placeholder autocomplete). Data model and storage (`browser.storage.local`, key `_custom_placeholder`) are documented in `claude-spec/03-placeholders.md`.
+The custom data placeholder CRUD screen — structurally the sibling of the Manage Custom Prompts page (List.js table, hidden `#formNew` add-form, Import/Export/Save All, placeholder autocomplete). Data model and storage (`browser.storage.local`, key `_custom_placeholder`) are documented in `docs/specs/03-placeholders.md`.
 
 **It shares the same design "1b"** as the custom prompts page, with its own copy of the tokens in `mzta-custom-dataplaceholders.css` (the two pages deliberately keep private token blocks; neither uses `pages/_lib/mzta-design.css`):
 
@@ -469,7 +469,7 @@ still match. If `connection-ui.js` is ever changed to wrap its description text 
 
 ### Menu Order Page (`pages/menu_order/`)
 
-Entry point from the options page via the "Menu Order" button (next to "Manage your prompts"). Provides drag-and-drop reordering and toggle-based visibility control for both the popup and the context menu. See `claude-spec/02-prompts.md` ("Menu Order Page") for the full behaviour, data flow, and exclusion rules.
+Entry point from the options page via the "Menu Order" button (next to "Manage your prompts"). Provides drag-and-drop reordering and toggle-based visibility control for both the popup and the context menu. See `docs/specs/02-prompts.md` ("Menu Order Page") for the full behaviour, data flow, and exclusion rules.
 
 ### Translate Settings Page (`pages/translate/`)
 

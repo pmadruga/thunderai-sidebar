@@ -38,7 +38,7 @@ def check():
     for path in files:
         if path.endswith(('.js', '.mjs')):
             subprocess.run(['node', '--check', str(ROOT / path)], check=True, capture_output=True)
-    inventory = json.loads((ROOT / 'scripts/vendor-lock.json').read_text())
+    inventory = json.loads((ROOT / 'config/vendor-lock.json').read_text())
     for entry in inventory:
         for key in ['file', 'version', 'source', 'license', 'license_file', 'sha256']:
             assert entry.get(key), (entry.get('file'), key)
@@ -48,7 +48,7 @@ def check():
     runtime_roots = {'api_webchat', 'experiments', 'js', 'options', 'pages', 'popup'}
     for name in publication_files:
         if name.split('/')[0] in runtime_roots and name.endswith(('.js', '.mjs')) and (ROOT / name).is_file():
-            assert name in files, f'Runtime module missing from release-files.txt: {name}'
+            assert name in files, f'Runtime module missing from config/release-files.txt: {name}'
     tracked = subprocess.check_output(['git', '-C', str(ROOT), 'ls-files'], text=True).splitlines()
     assert not any(path.startswith(('backup/', 'dist/')) or path.endswith(('.eml', '.xpi')) for path in tracked)
     print(f'Validated {len(files)} package paths, manifest/experiment structure, locale JSON, JavaScript syntax, and vendor hashes.')

@@ -306,7 +306,7 @@ console.log(data.file.name);
 
 **1. No Build Tools**
 - Include 3rd party libraries directly (don't use webpack, rollup, etc.)
-- Include a `VENDORS.md` file documenting all 3rd party libraries with links to exact versions (not "latest"). Example: https://webextension-api.thunderbird.net/en/mv2/guides/vcard.html
+- Include a `docs/VENDORS.md` file documenting all 3rd party libraries with links to exact versions (not "latest"). Example: https://webextension-api.thunderbird.net/en/mv2/guides/vcard.html
 
 **2. Permissions**
 - Only request permissions you actually need
@@ -336,7 +336,7 @@ Before providing any code, verify ALL of these:
 - [ ] VENDORS.md includes ALL dependencies with exact version URLs
 - [ ] Used `browser_specific_settings` (NOT deprecated `applications`)
 - [ ] Error handling matches the surrounding code's style — not blanket try/catch everywhere (the existing codebase applies it selectively, where a failure is actually expected/handleable)
-- [ ] Comments follow repo convention: sparse, only where the *why* isn't obvious from the code (see root `CLAUDE.md`) — not a comment on every line
+- [ ] Comments follow repo convention: sparse, only where the *why* isn't obvious from the code (see root `docs/contributor-guide.md`) — not a comment on every line
 - [ ] No hardcoded user-facing strings — use the i18n API (`_locales/en/messages.json` only)
 - [ ] Add-on fulfills all requirements in the "Add-on Review Requirements" section
 - [ ] All guidelines in "Important Guidelines for AI Assistants" are followed

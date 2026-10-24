@@ -80,7 +80,7 @@ the per-answer Close button with a header ✕, and uses a thin themed scrollbar.
 
 `api_webchat/attachments.js` turns a user-chosen file into plain text:
 text-like files directly, PDF with the bundled pdf.js
-(`js/lib/pdfjs/`, Apache-2.0, see VENDORS.md; `isEvalSupported: false`
+(`js/lib/pdfjs/`, Apache-2.0, see docs/VENDORS.md; `isEvalSupported: false`
 because extension pages forbid eval; cleanup via `loadingTask.destroy()` in
 pdf.js 6), and .docx by reading `word/document.xml` from the zip with
 `DecompressionStream('deflate-raw')`. Each document is capped at

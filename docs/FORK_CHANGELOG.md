@@ -15,4 +15,4 @@ This file describes modifications by Pedro Madruga and fork contributors to [mic
 - Add security and reliability hardening, repository checks, tests, an explicit package inventory, deterministic release archives and checksums.
 - Retain upstream GPL attribution and add bundled third-party license notices.
 
-This release uses Thunderbird Experiment APIs. See [Privacy](PRIVACY.md) and the compatibility notes in [README.md](README.md). The build is prepared from this repository; a release is available only when a corresponding tagged asset has actually been published.
+This release uses Thunderbird Experiment APIs. See [Privacy](PRIVACY.md) and the compatibility notes in [README.md](../README.md). The build is prepared from this repository; a release is available only when a corresponding tagged asset has actually been published.

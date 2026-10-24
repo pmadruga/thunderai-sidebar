@@ -24,6 +24,7 @@ def main():
     parser.add_argument('--http-port', type=int, default=18770)
     parser.add_argument('--screenshots', type=Path, help='Save README screenshots using synthetic demo mail')
     parser.add_argument('--theme', choices=['light', 'dark'], default='light', help='Thunderbird theme for screenshots')
+    parser.add_argument('--screenshot-scale', type=int, choices=[1, 2], default=2, help='Pixel density for screenshot captures')
     args = parser.parse_args()
     question = 'What are the next steps for the website launch?' if args.screenshots else 'Synthetic private question æøå'
     answer = ('Here are the next steps from the email:\n\n'
@@ -61,6 +62,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix='ta-sidebar-live-') as temp:
         root = Path(temp); profile=root/'profile'; profile.mkdir()
         (profile/'user.js').write_text(f'user_pref("marionette.port", {args.port});\nuser_pref("mail.provider.suppress_dialog_on_startup", true);\nuser_pref("mail.shell.checkDefaultClient", false);\n')
+        if args.screenshots:
+            with (profile / 'user.js').open('a') as prefs:
+                prefs.write(f'user_pref("layout.css.devPixelsPerPx", "{args.screenshot_scale}.0");\n')
         local_xpi=root/'test.xpi'; local_xpi.write_bytes(args.xpi.read_bytes())
         log=(root/'thunderbird.log').open('w')
         launcher=['flatpak','run','--filesystem='+str(root),'--command=/app/lib64/thunderbird/thunderbird','net.thunderbird.Thunderbird'] if args.flatpak else [args.binary]
@@ -89,7 +93,12 @@ def main():
                 return js("return document.querySelector('messages-area')?.shadowRoot?.textContent || '';")
             def open_chat():
                 wait(lambda:js("return !!document.querySelector('message-input')?.shadowRoot;"),'sidebar boot')
-                js("return window.wrappedJSObject.browser.runtime.sendMessage({command:'shortcut_do_prompt',promptId:'prompt_chat_email',tabId:"+str(setup['tabId'])+"});")
+                try:
+                    js("return window.wrappedJSObject.browser.runtime.sendMessage({command:'shortcut_do_prompt',promptId:'prompt_chat_email',tabId:"+str(setup['tabId'])+"});")
+                except AssertionError as error:
+                    # Opening the conversation can unload the bootstrap page
+                    # before the runtime message's promise returns to its actor.
+                    if 'Document was unloaded' not in str(error): raise
                 time.sleep(1)
             def send(text):
                 js("const s=document.querySelector('message-input').shadowRoot;const f=s.querySelector('#messageInputField');f.value="+json.dumps(text)+";f.dispatchEvent(new Event('input',{bubbles:true}));s.querySelector('#sendButton').click();return true;")

@@ -303,7 +303,7 @@ mid-edit takes effect immediately with no re-registration.
 - The two table-based CRUD pages (customprompts, customdataplaceholders) pass no type and instead
   resolve it from the row: `textarea.closest('tr')` → `.type_output`. This **must** use `closest()`,
   not a fixed `parentNode` chain — the editor markup nests the textarea inside a backdrop wrapper
-  (see `claude-spec/05-options.md`), and a fixed chain silently breaks type filtering, throwing on
+  (see `docs/specs/05-options.md`), and a fixed chain silently breaks type filtering, throwing on
   every keystroke inside an `input` handler.
 
 **Insertion.** Accepting a suggestion **replaces the whole typed token**: it selects
