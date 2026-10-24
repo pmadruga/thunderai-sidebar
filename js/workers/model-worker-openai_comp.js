@@ -21,66 +21,8 @@
  */
 
 import { OpenAIComp } from '../api/openai_comp.js';
-import { ChatSession } from './chat-session.js';
-import { configureEndpointPolicy } from '../endpoint-policy.js';
+import { createWorkerHandler } from './worker-runtime.js';
 
-let conversationHistory = [];
-let previous_response_id = null;
-let client = null;
-let session = null;
-let tools = null;
-let strings = {};
-let contextSize = null;
-
-self.onmessage = async function(event) {
-    const data = event.data;
-    if (data.type === 'restoreHistory') {
-        session?.stop();
-        conversationHistory = Array.isArray(data.history) ? data.history : [];
-        previous_response_id = null;
-        if (session) { session.history = conversationHistory; session.resetResponseId(); }
-        return;
-    }
-    if (data.type === 'stop') { session?.stop(); return; }
-    try {
-        if (data.type === 'init') {
-            configureEndpointPolicy(data.allowed_http_origins || []);
-            const config = { stream: true };
-            for (const key in data) {
-                if (!key.startsWith('openai_comp_') || key.startsWith('chatgpt_web_')) continue;
-                let name = key.slice('openai_comp_'.length);
-                if (name === 'api_key') name = 'apiKey';
-                config[name] = data[key];
-            }
-            client = new OpenAIComp(config);
-            strings = data.i18nStrings || {};
-            previous_response_id = null;
-            if (session) { session.client = client; session.strings = strings; session.resetResponseId(); }
-            const activeClient = client;
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 5000);
-            activeClient.fetchContextSize({ signal: controller.signal }).then(size => {
-                if (client !== activeClient) return;
-                contextSize = size;
-                if (session) session.contextSize = size;
-                postMessage({ type: 'usage', payload: { used: 0, size } });
-            }).catch(() => {}).finally(() => clearTimeout(timer));
-        } else if (data.type === 'setTools') {
-            tools = Array.isArray(data.tools) && data.tools.length ? data.tools : null;
-            if (session) session.tools = tools;
-        } else if (data.type === 'chatMessage' || data.type === 'toolResults') {
-            if (!client) throw new Error('AI provider is not configured');
-            if (!session) session = new ChatSession({
-                provider: 'openai_comp', client, history: conversationHistory, strings,
-                emit: message => postMessage(message),
-                onResponseId: id => { previous_response_id = id; },
-            });
-            session.tools = tools;
-            session.contextSize = contextSize;
-            if (data.type === 'chatMessage') await session.send(data.message);
-            else await session.toolResults(data.results, data.requestId);
-        }
-    } catch (error) {
-        postMessage({ type: 'error', payload: 'AI request failed: ' + (error?.message || 'Unknown error'), history: conversationHistory });
-    }
-};
+self.onmessage = createWorkerHandler({
+    provider: 'openai_comp', Client: OpenAIComp,
+});

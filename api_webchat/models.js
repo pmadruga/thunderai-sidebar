@@ -1,3 +1,4 @@
+import { providerConfig } from '../js/api/provider-config.js';
 import { OpenAI } from '../js/api/openai_responses.js';
 import { GoogleGemini } from '../js/api/google_gemini.js';
 import { Ollama } from '../js/api/ollama.js';
@@ -9,14 +10,7 @@ const clients = { chatgpt: OpenAI, google_gemini: GoogleGemini, ollama: Ollama,
 
 // Use the effective chat settings, including any per-prompt host/key override.
 export async function fetchChatModels(integration, prefs) {
-    const config = {};
-    const prefix = `${integration}_`;
-    for (const [key, value] of Object.entries(prefs)) {
-        if (key.startsWith(prefix)) {
-            const name = key.slice(prefix.length);
-            config[name === 'api_key' ? 'apiKey' : name] = value;
-        }
-    }
+    const config = providerConfig(integration, prefs);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10000);
     try {

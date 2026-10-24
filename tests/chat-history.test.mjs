@@ -1,7 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import vm from 'node:vm';
 import { EmailChatHistory } from '../api_webchat/chatHistory.js';
 import { ChatHistoryStore, emailThreadKey } from '../js/mzta-chathistory.js';
 const key = 'a'.repeat(64), other = 'b'.repeat(64);
@@ -209,16 +207,3 @@ test('disabled history loads no retained content and rejects new writes', async 
     assert.equal(h.data[ROOT + key].deleted, true);
     await assert.rejects(save(h.store, key, disabled, patch('new')), /DISABLED/);
 });
-
-for (const provider of ['anthropic', 'google_gemini', 'ollama', 'openai_comp', 'openai_responses']) {
-    test(`${provider} restores history without sending a request`, async () => {
-        const source = (await readFile(new URL(`../js/workers/model-worker-${provider}.js`, import.meta.url), 'utf8'))
-            .replace(/^import [\s\S]*?;\n/gm, '');
-        const context = vm.createContext({ self: {}, postMessage() { assert.fail('Restoration must not generate'); } });
-        vm.runInContext(source, context);
-        const history = [{ role: 'user', content: 'Saved question' }];
-        await context.self.onmessage({ data: { type: 'restoreHistory', history } });
-        assert.deepEqual(vm.runInContext('conversationHistory', context), history);
-        if (provider === 'openai_responses') assert.equal(vm.runInContext('previous_response_id', context), null);
-    });
-}

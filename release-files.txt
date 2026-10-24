@@ -235,3 +235,5 @@ popup/mzta-popup.css
 popup/mzta-popup.html
 popup/mzta-popup.js
 scripts/vendor-lock.json
+js/api/provider-config.js
+js/workers/worker-runtime.js

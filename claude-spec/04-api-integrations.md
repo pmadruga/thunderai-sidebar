@@ -422,11 +422,15 @@ API calls require host permissions. These are declared as `optional_permissions`
 ## Adding a New Provider
 
 1. Create `js/api/<provider>.js` with the API call logic
-2. Create `js/workers/model-worker-<provider>.js` that imports and calls the API module
+2. Create a small `js/workers/model-worker-<provider>.js` entry point that passes the API client and provider ID to `createWorkerHandler()` in `worker-runtime.js`. Keep lifecycle logic in the shared runtime.
 3. Add a new `connection_type` value constant
 4. Add settings keys to `integration_options_config` in `options/mzta-options-default.js`
 5. Add UI controls to `options/mzta-options.html` and `options/mzta-options.js`
 6. Add the new `connection_type` case to the dispatch logic in `mzta-background.js`
 7. Add required host permissions to `manifest.json` optional_permissions
 8. Add i18n strings to `_locales/en/messages.json`
-9. Branch on `is_exception` in the worker's error block — see [Error contract between `js/api/*` and workers](#error-contract-between-jsapi-and-workers) above
+9. Use the shared `ChatSession` error handling and supply a provider error formatter only when needed. See [Error contract between `js/api/*` and workers](#error-contract-between-jsapi-and-workers) above
+
+## Shared worker lifecycle
+
+`worker-runtime.js` handles initialization, history restoration, cancellation, tool configuration and message dispatch for all five provider workers. `chat-session.js` owns streaming conversation state and response IDs. `provider-config.js` is shared by worker initialization and model discovery, so preference mapping is maintained once. Provider entry points retain their original paths and upstream license headers. See [the codebase guide](../docs/codebase.md).
