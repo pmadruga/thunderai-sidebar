@@ -46,7 +46,7 @@ and sends **nothing** until the user types.
 - `openEmailChat()` (background) sorts messages oldest first, keeps the most
   recent 30, reads each body with `messages.listInlineTextParts()` (HTML via
   `messengerUtilities.convertToPlainText()`), and calls `openChatGPT()` with
-  `prompt_info.chat_mode = true`. The usual max prompt length check applies.
+  `prompt_info.chat_mode = true`. API servers enforce their model context limits; the old character limit applies only to ChatGPT Web.
 - For API connections the background then sends `api_context` instead of
   `api_send`. The page shows a notice, sets the input placeholder and calls
   `messageInput.setPendingContext()`; the context is prepended to the user's

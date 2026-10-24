@@ -19,6 +19,8 @@ ThunderAI is a **Thunderbird WebExtension (Manifest V2)** that integrates multip
 7. **Settings defaults:** All new preferences must be added to `options/mzta-options-default.js` in `prefs_default`.
 8. **Keep spec files up to date:** When making code changes that affect a subsystem described in claude-spec/, update the relevant spec file to reflect the new behavior. Read the spec before modifying, update it after.
 
+See [docs/codebase.md](docs/codebase.md) for the maintained module responsibility map and screenshot reproduction.
+
 ## Directory Map
 
 ```
@@ -28,7 +30,7 @@ ThunderAI is a **Thunderbird WebExtension (Manifest V2)** that integrates multip
 ├── manifest.json           # Extension manifest
 ├── js/                     # Core modules
 │   ├── api/                # AI API integration modules
-│   ├── workers/            # Web Workers (one per API provider)
+│   ├── workers/            # Provider entry points plus shared lifecycle and streaming
 │   ├── lib/                # Third-party libraries (diff.js)
 │   └── mzta-*.js           # Core utilities, menus, prompts, placeholders
 ├── options/                # Settings UI

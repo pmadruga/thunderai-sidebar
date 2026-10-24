@@ -22,7 +22,18 @@ def main():
     parser.add_argument('--xpi', type=Path, required=True)
     parser.add_argument('--port', type=int, default=2836)
     parser.add_argument('--http-port', type=int, default=18770)
+    parser.add_argument('--screenshots', type=Path, help='Save README screenshots using synthetic demo mail')
     args = parser.parse_args()
+    question = 'What are the next steps for the website launch?' if args.screenshots else 'Synthetic private question æøå'
+    answer = ('Here are the next steps from the email:\n\n'
+              '1. **Maya:** approve the homepage copy by Tuesday.\n'
+              '2. **Alex:** check the mobile layout and contact form.\n'
+              '3. **Team:** confirm the Thursday launch in Wednesday’s review.\n\n'
+              '**Still open:** choose who will monitor the contact inbox after launch.') if args.screenshots else 'Synthetic sidebar response.'
+    continuation = 'Draft a short reply confirming that I will test the mobile layout.' if args.screenshots else 'Synthetic continuation'
+    followup = ('Hi Maya,\n\nI’ll test the mobile layout and contact form before Wednesday’s review. '
+                'I’ll share any issues in time for the Thursday launch.\n\nBest,\nAlex') if args.screenshots else answer
+
     from marionette_driver.marionette import Marionette
     requests = []
     class Mock(BaseHTTPRequestHandler):
@@ -35,13 +46,13 @@ def main():
         def do_OPTIONS(self):
             self.send_response(204); self.end_headers()
         def do_GET(self):
-            data = {'default_generation_settings':{'n_ctx':131072}} if self.path == '/props' else {'data':[{'id':'synthetic-context-test','context_length':131072}]}
+            data = {'default_generation_settings':{'n_ctx':131072}} if self.path == '/props' else {'data':[{'id':'demo-local-model','context_length':131072}]}
             self.send_response(200); self.send_header('Content-Type','application/json'); self.end_headers()
             self.wfile.write(json.dumps(data).encode())
         def do_POST(self):
             requests.append(json.loads(self.rfile.read(int(self.headers['Content-Length']))))
             self.send_response(200); self.send_header('Content-Type','text/event-stream'); self.end_headers()
-            chunks = [{'choices':[{'delta':{'content':'Synthetic sidebar response.'},'finish_reason':None}]}, {'choices':[{'delta':{},'finish_reason':'stop'}],'usage':{'prompt_tokens':30000,'completion_tokens':6,'total_tokens':30006}}]
+            chunks = [{'choices':[{'delta':{'content':answer if len(requests) == 1 else followup},'finish_reason':None}]}, {'choices':[{'delta':{},'finish_reason':'stop'}],'usage':{'prompt_tokens':1200 if args.screenshots else 30000,'completion_tokens':90,'total_tokens':1290 if args.screenshots else 30090}}]
             for chunk in chunks: self.wfile.write(('data: '+json.dumps(chunk)+'\n\n').encode()); self.wfile.flush()
             self.wfile.write(b'data: [DONE]\n\n'); self.wfile.flush()
     server = ThreadingHTTPServer(('127.0.0.1',args.http_port),Mock)
@@ -56,25 +67,9 @@ def main():
         client=None
         try:
             client=Marionette(host='127.0.0.1',port=args.port); client.raise_for_port(timeout=45); client.start_session(); client.set_context('chrome'); client.timeout.script=30
-            setup=client.execute_async_script(r'''
-const done=arguments[arguments.length-1];
-(async()=>{
-const {AddonManager}=ChromeUtils.importESModule('resource://gre/modules/AddonManager.sys.mjs');
-const file=Cc['@mozilla.org/file/local;1'].createInstance(Ci.nsIFile);file.initWithPath(arguments[0]);await AddonManager.installTemporaryAddon(file);
-const {ExtensionParent}=ChromeUtils.importESModule('resource://gre/modules/ExtensionParent.sys.mjs');
-const {ExtensionPermissions}=ChromeUtils.importESModule('resource://gre/modules/ExtensionPermissions.sys.mjs');
-const e=ExtensionParent.GlobalManager.getExtension(arguments[1]);const v=[...e.views].find(v=>v.viewType==='background');
-await ExtensionPermissions.add(e.id,{permissions:[],origins:['http://127.0.0.1/*']});
-await v.apiCan.findAPIPath('storage.sync.set')({connection_type:'openai_comp_api',openai_comp_host:arguments[2],openai_comp_model:'synthetic-context-test',openai_comp_use_v1:true,openai_comp_api_key:'',max_prompt_length:1});
-const {MailServices}=ChromeUtils.importESModule('resource:///modules/MailServices.sys.mjs');
-try {MailServices.accounts.localFoldersServer;} catch(_){MailServices.accounts.createLocalMailAccount();}
-const folder=MailServices.accounts.localFoldersServer.rootFolder.getChildNamed('Trash');
-const hdr=folder.QueryInterface(Ci.nsIMsgLocalMailFolder).addMessage('From: synthetic@example.invalid\r\nTo: test@example.invalid\r\nSubject: Sidebar synthetic test\r\nMessage-ID: <sidebar-test@example.invalid>\r\nDate: Sat, 24 Oct 2026 12:00:00 +0000\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n'+'Synthetic mail context content. '.repeat(4000)+'\r\n');
-const converted=e.messageManager.convert(hdr);const tab=await v.apiCan.findAPIPath('messageDisplay.open')({messageId:converted.id,location:'tab'});
-await v.apiCan.findAPIPath('chatPanel.open')(tab.windowId,e.baseURI.spec+'api_webchat/index.html?llm=openai_comp_api&panel=1&call_id=synthetic&prompt_name=Test');
-return {tabId:tab.id};
-})().then(done,e=>done({error:String(e)}));
-''',script_args=[str(local_xpi),EXTENSION_ID,f'http://127.0.0.1:{args.http_port}'])
+            client.set_window_rect(width=1500, height=1000)
+            setup_script = (Path(__file__).parent / 'fixtures' / 'sidebar-setup.js').read_text()
+            setup=client.execute_async_script(setup_script,script_args=[str(local_xpi),EXTENSION_ID,f'http://127.0.0.1:{args.http_port}',bool(args.screenshots)])
             assert 'error' not in setup, setup
             wrapper="""const done=arguments[arguments.length-1];const b=Services.wm.getMostRecentWindow('mail:3pane').document.querySelector('#thunderai-chat-panel browser');b.browsingContext.currentWindowGlobal.getActor('MarionetteCommands').executeScript(arguments[0],[],{sandboxName:'default',newSandbox:true,timeout:20000}).then(done,e=>done({error:String(e)}));"""
             def js(code):
@@ -98,27 +93,39 @@ return {tabId:tab.id};
             def send(text):
                 js("const s=document.querySelector('message-input').shadowRoot;const f=s.querySelector('#messageInputField');f.value="+json.dumps(text)+";f.dispatchEvent(new Event('input',{bubbles:true}));s.querySelector('#sendButton').click();return true;")
             open_chat()
-            send('Synthetic private question æøå')
-            wait(lambda:'Synthetic sidebar response.' in content(),'first streaming response')
+            send(question)
+            wait(lambda:answer.split('\n')[0] in content(),'first streaming response')
             wait(lambda:len(requests)==1,'first model request')
-            assert len(requests[0]['messages'][0]['content'])>100000, 'email context missing or truncated'
+            if not args.screenshots:
+                assert len(requests[0]['messages'][0]['content'])>100000, 'email context missing or truncated'
+            else:
+                assert 'approve the homepage copy by Tuesday' in requests[0]['messages'][0]['content']
             time.sleep(2)
+            def screenshot(name, panel_only=False):
+                if not args.screenshots: return
+                time.sleep(4)
+                args.screenshots.mkdir(parents=True, exist_ok=True)
+                element = client.find_element('css selector', '#thunderai-chat-panel') if panel_only else None
+                (args.screenshots / name).write_bytes(client.screenshot(element=element, format='binary'))
+            screenshot('email-chat.png')
             records=js("return window.wrappedJSObject.browser.storage.local.get(null).then(d=>Object.fromEntries(Object.entries(d).filter(([k])=>k.startsWith('email_chat_'))));")
             assert any(v.get('encryption')=='oskeystore-v2' for v in records.values() if isinstance(v,dict)), 'encrypted v2 root absent'
-            assert 'Synthetic private question' not in json.dumps(records) and 'Synthetic mail context' not in json.dumps(records), 'plaintext history persisted'
+            assert question not in json.dumps(records) and 'Synthetic mail context' not in json.dumps(records), 'plaintext history persisted'
             js('window.location.reload();return true;'); time.sleep(1); open_chat()
-            wait(lambda:'Synthetic private question æøå' in content() and 'Synthetic sidebar response.' in content(),'restored transcript')
+            wait(lambda:question in content() and answer.split('\n')[0] in content(),'restored transcript')
             assert len(requests)==1, 'restoration sent an unexpected provider request'
-            send('Synthetic continuation')
+            send(continuation)
             wait(lambda:len(requests)==2,'continued model request')
-            assert any(m.get('role')=='assistant' and m.get('content')=='Synthetic sidebar response.' for m in requests[1]['messages']), 'restored provider history missing'
-            wait(lambda:content().count('Synthetic sidebar response.')>=2,'continued response')
+            assert any(m.get('role')=='assistant' and m.get('content')==answer for m in requests[1]['messages']), 'restored provider history missing'
+            wait(lambda:followup.split('\n')[0] in content() and (args.screenshots or content().count(answer)>=2),'continued response')
+            time.sleep(.5)
+            screenshot('draft-reply.png', panel_only=True)
             # Exercise the clear button handler, accepting its confirmation in this test page.
             js("window.wrappedJSObject.confirm=()=>true;document.querySelector('#clearEmailChat').click();return true;")
-            wait(lambda:'Synthetic private question' not in content(),'clear chat UI')
+            wait(lambda:question not in content(),'clear chat UI')
             js('window.location.reload();return true;'); time.sleep(1); open_chat()
-            assert 'Synthetic private question' not in content(), 'deleted conversation restored'
-            print(json.dumps({'sidebarBoot':True,'longContextSent':True,'streamRendered':True,'nativeEncryptedStorage':True,'restoredAfterReload':True,'continuedProviderHistory':True,'deletedAfterReopen':True,'providerRequests':len(requests)},sort_keys=True))
+            assert question not in content(), 'deleted conversation restored'
+            print(json.dumps({'sidebarBoot':True,'longContextSent':len(requests[0]['messages'][0]['content'])>100000,'streamRendered':True,'nativeEncryptedStorage':True,'restoredAfterReload':True,'continuedProviderHistory':True,'deletedAfterReopen':True,'providerRequests':len(requests)},sort_keys=True))
         finally:
             if client:
                 try: client.execute_script('Services.startup.quit(Ci.nsIAppStartup.eForceQuit);')
