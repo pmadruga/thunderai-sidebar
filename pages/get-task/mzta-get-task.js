@@ -1,3 +1,4 @@
+import { getSecureSettings, setSecureSettings, promptStorage } from '../../js/secure-settings.js';
 /*
  *  ThunderAI [https://micz.it/thunderbird-addon-thunderai/]
  *  Copyright (C) 2024 - 2026  Mic (m@micz.it)
@@ -79,7 +80,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                  }
              }
         }
-        await browser.storage.sync.set(update_prefs);
+        await setSecureSettings(update_prefs);
     }
 
     // Must run before restoreOptions(), which is called by initializeSpecificIntegrationUI()
@@ -210,7 +211,7 @@ function saveOptions(e) {
         console.error("[ThunderAI] Unhandled input type:", element.type);
     }
 
-  browser.storage.sync.set(options);
+  setSecureSettings(options);
 }
 
 async function restoreOptions() {
@@ -267,7 +268,7 @@ async function restoreOptions() {
     });
   }
 
-  let getting = await browser.storage.sync.get(prefs_default);
+  let getting = await getSecureSettings(prefs_default);
 
   let specialPrompts = await getSpecialPrompts();
   let get_task_prompt = specialPrompts.find(prompt => prompt.id === 'prompt_get_task');

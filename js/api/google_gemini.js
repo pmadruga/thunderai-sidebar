@@ -18,6 +18,9 @@
 
 
 
+import { redactApiError } from './api-utils.js';
+import { secureFetch } from '../endpoint-policy.js';
+
 export class GoogleGemini {
 
   apiKey = '';
@@ -53,10 +56,11 @@ export class GoogleGemini {
   }
 
 
-  fetchModels = async () => {
+  fetchModels = async (signal) => {
     try{
-      const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + this.apiKey, {
+      const response = await secureFetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + this.apiKey, {
           method: "GET",
+          signal,
           headers: {
               "Content-Type": "application/json"
           },
@@ -65,10 +69,10 @@ export class GoogleGemini {
       if (!response.ok) {
           const errorDetail = await response.text();
           let err_msg = "[ThunderAI] Google Gemini API request failed: " + response.status + " " + response.statusText + ", Detail: " + errorDetail;
-          console.error(err_msg);
+          console.error("[ThunderAI] Provider rejected the models request");
           let output = {};
           output.ok = false;
-          output.error = errorDetail;
+          output.error = redactApiError(errorDetail, this.apiKey);
           return output;
       }
 
@@ -80,16 +84,17 @@ export class GoogleGemini {
 
       return output;
     }catch (error) {
-      console.error("[ThunderAI] Google Gemini API request failed: " + error);
+        if (error?.name === 'AbortError') throw error;
+      console.error("[ThunderAI] Google Gemini API request failed: ");
       let output = {};
       output.is_exception = true;
       output.ok = false;
-      output.error = "Google Gemini API request failed: " + error;
+      output.error = "Google Gemini API request failed: " + redactApiError(error, this.apiKey);
       return output;
     }
   }
   
-  fetchResponse = async (messages) => {
+  fetchResponse = async (messages, { signal } = {}) => {
     try {
 
       let google_gemini_body = {
@@ -138,8 +143,9 @@ export class GoogleGemini {
 
       //  console.log(">>>>>>>>>>>>>>>>> [ThunderAI] Google Gemini API request: " + JSON.stringify(google_gemini_body));
 
-      const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + this.model + ":" + (this.stream ? 'streamGenerateContent?alt=sse&' : 'generateContent?') + "key=" + this.apiKey, {
+      const response = await secureFetch("https://generativelanguage.googleapis.com/v1beta/models/" + this.model + ":" + (this.stream ? 'streamGenerateContent?alt=sse&' : 'generateContent?') + "key=" + this.apiKey, {
           method: "POST",
+            signal,
           headers: { 
               "Content-Type": "application/json"
           },
@@ -147,11 +153,12 @@ export class GoogleGemini {
       });
       return response;
     }catch (error) {
-        console.error("[ThunderAI] Google Gemini API request failed: " + error);
+        if (error?.name === 'AbortError') throw error;
+        console.error("[ThunderAI] Google Gemini API request failed: ");
         let output = {};
         output.is_exception = true;
         output.ok = false;
-        output.error = "Google Gemini API request failed: " + error;
+        output.error = "Google Gemini API request failed: " + redactApiError(error, this.apiKey);
         return output;
     }
   }

@@ -25,7 +25,12 @@ import { placeholdersUtils } from '../js/mzta-placeholders.js';
 import { getAPIsInitMessageString, convertNewlinesToBr } from '../js/mzta-utils.js';
 import { loadPrompt } from '../js/mzta-prompts.js';
 import { buildChatBubbleIcon } from './svgIcons.js';
-import { runSpTool, describeSpTool, getSpTaskTitle, SP_WRITE_TOOLS } from './superproductivity.js';
+import { runSpTool, describeSpTool, getSpTaskTitle, SP_WRITE_TOOLS, validateToolArguments } from './superproductivity.js';
+import { fetchChatModels } from './models.js';
+import { EmailChatHistory } from './chatHistory.js';
+import { providerDestination, historyDestinationKey } from './historyIdentity.js';
+import { getSecureSettings, setSecureSettings } from '../js/secure-settings.js';
+import { acknowledgedHttpOrigins } from '../js/endpoint-policy.js';
 
 // Set when the chat runs in the ThunderAI side panel (see experiments/chatPanel)
 const mztaInPanel = new URLSearchParams(window.location.search).get('panel') === '1';
@@ -57,12 +62,12 @@ function setZoom(scale) {
     scale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(scale * 10) / 10));
     currentZoom = scale;
     applyZoom(scale);
-    browser.storage.sync.set({ api_webchat_font_scale: scale });
+    setSecureSettings({ api_webchat_font_scale: scale });
 }
 
 // Load the saved zoom level and apply it as soon as possible.
 (async () => {
-    const { api_webchat_font_scale } = await browser.storage.sync.get({ api_webchat_font_scale: prefs_default.api_webchat_font_scale });
+    const { api_webchat_font_scale } = await getSecureSettings({ api_webchat_font_scale: prefs_default.api_webchat_font_scale });
     currentZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, api_webchat_font_scale));
     applyZoom(currentZoom);
 })();
@@ -94,7 +99,41 @@ document.addEventListener('keydown', (event) => {
 // The controller wires up all the components and workers together,
 // managing the dependencies. A kind of "DI" class.
 let worker = null;
+let destination = null;
+let activeToolRequest = null;
+let chatPageBlocked = false;
+let restoreEpoch = 0;
+let boundContextIdentity = null;
 const integration = llm.replace('_api', '');
+let historyWarningShown = false;
+const chatHistory = new EmailChatHistory(integration, error => {
+    console.error('[ThunderAI] Could not save email chat');
+    if (!historyWarningShown) {
+        historyWarningShown = true;
+        messagesArea.appendBotMessage(browser.i18n.getMessage('chat_history_save_error'), 'error');
+    }
+});
+const clearChat = document.getElementById('clearEmailChat');
+clearChat.textContent = browser.i18n.getMessage('chat_history_clear');
+clearChat.title = browser.i18n.getMessage('chat_history_private');
+messageInput.addEventListener('chat-message', event => {
+    clearChat.disabled = true;
+    chatHistory.user(event.detail);
+});
+clearChat.addEventListener('click', async () => {
+    if (!clearChat.dataset.key || !window.confirm(browser.i18n.getMessage('chat_history_clear_confirm'))) return;
+    const key = clearChat.dataset.key;
+    const previousKey = chatHistory.key;
+    chatHistory.invalidate();
+    try {
+        await browser.runtime.sendMessage({ command: 'email_chat_history', operation: 'delete', key });
+        await browser.runtime.sendMessage({ command: 'shortcut_do_prompt', promptId: 'prompt_chat_email', tabId: promptData.tabId });
+    } catch (error) {
+        chatHistory.key = previousKey;
+        messagesArea.appendBotMessage(browser.i18n.getMessage('chat_history_save_error'), 'error');
+    }
+});
+window.addEventListener('pagehide', () => chatHistory.save());
 const worker_path_map = {
     chatgpt: '../js/workers/model-worker-openai_responses.js',
     google_gemini: '../js/workers/model-worker-google_gemini.js',
@@ -128,7 +167,7 @@ if (worker) {
             prefsToGet.openai_comp_chat_name = prefs_default.openai_comp_chat_name;
         }
 
-        let prefs_api = await browser.storage.sync.get(prefsToGet);
+        let prefs_api = await getSecureSettings(prefsToGet);
 
         if (prompt_id) {
             try {
@@ -142,7 +181,7 @@ if (worker) {
                     }
                 }
             } catch (e) {
-                console.error("[ThunderAI] Error loading prompt settings:", e);
+                console.error("[ThunderAI] Error loading prompt settings");
             }
         }
 
@@ -151,6 +190,8 @@ if (worker) {
         i18nStrings[i18n_msg_key] = browser.i18n.getMessage(i18n_msg_key);
         i18nStrings["error_connection_interrupted"] = browser.i18n.getMessage('error_connection_interrupted');
 
+        destination = providerDestination(integration, prefs_api);
+        messageInput.setProviderDestination(destination);
         messageInput.setModel(prefs_api[`${integration_prefix}_model`]);
         
         let llmName = "API";
@@ -201,6 +242,7 @@ if (worker) {
 
         let workerInitMessage = {
             type: 'init',
+            allowed_http_origins: await acknowledgedHttpOrigins(),
             do_debug: prefs_api.do_debug,
             i18nStrings: i18nStrings,
         };
@@ -211,6 +253,26 @@ if (worker) {
         }
         
         worker.postMessage(workerInitMessage);
+
+        messageInput.configureModels(() => fetchChatModels(integration, prefs_api), model => {
+            const modelKey = `${integration_prefix}_model`;
+            prefs_api[modelKey] = model;
+            workerInitMessage[modelKey] = model;
+            // Reconfigure the same worker: its conversation history and tools stay
+            // intact. OpenAI clears previous_response_id and sends the full history.
+            worker.postMessage(workerInitMessage);
+            messageInput.setModel(model);
+            messageInput.setContextUsage(0, null);
+            const label = mztaInPanel
+                ? model.split(/[\\/]/).pop().replace(/\.gguf$/i, '')
+                : prompt_label ? `${prompt_label} | ${model}` : model;
+            modelChip.textContent = label;
+            modelChip.title = label;
+            if (mztaInPanel) {
+                const title = document.getElementById('appHeaderName');
+                title.title = `${title.textContent} | ${label}`;
+            }
+        });
 
         const additional_messages_config = {
             chatgpt: [
@@ -303,34 +365,46 @@ if (worker) {
     }
 }
 
-//let prefs_ph = await browser.storage.sync.get({placeholders_use_default_value: false});
+//let prefs_ph = await getSecureSettings({placeholders_use_default_value: false});
 
 // Event listeners for worker messages
 worker.onmessage = async function(event) {
+    if (chatPageBlocked) return;
     const { type, payload } = event.data;
     switch (type) {
         case 'messageSent':
             messageInput.handleMessageSent();
             break;
         case 'newToken':
+            chatHistory.token(payload.token);
             messagesArea.handleNewToken(payload.token);
             messageInput.showStreamingStatus();
             break;
         case 'newThinkingToken':
+            chatHistory.token(payload.token, true);
             messagesArea.handleNewThinkingToken(payload.token);
             messageInput.showStreamingStatus();
             break;
         case 'tokensDone':
+            activeToolRequest = null;
+            messagesArea.cancelToolConfirmations();
+            chatHistory.done(payload.history, payload.interrupted);
+            clearChat.disabled = false;
             await messagesArea.handleTokensDone(promptData);
+            if (chatPageBlocked) return;
             messageInput.enableInput();
             break;
         case 'toolCalls':
-            await handleToolCalls(payload.calls);
+            await handleToolCalls(payload.calls, payload.requestId);
             break;
         case 'usage':
             messageInput.setContextUsage(payload.used, payload.size);
             break;
         case 'error':
+            activeToolRequest = null;
+            messagesArea.cancelToolConfirmations();
+            chatHistory.error(payload, event.data.history);
+            clearChat.disabled = false;
             messagesArea.appendBotMessage(payload,'error');
             messageInput.enableInput(false);
             messageInput.showErrorStatus();
@@ -340,81 +414,175 @@ worker.onmessage = async function(event) {
     }
 };
 
+function workerFailed(event) {
+    event.preventDefault?.();
+    chatPageBlocked = true;
+    activeToolRequest = null;
+    messagesArea.cancelToolConfirmations();
+    const message = browser.i18n.getMessage('chat_worker_failed');
+    chatHistory.error(message);
+    messagesArea.appendBotMessage(message, 'error');
+    messageInput.enableInput(false);
+    messageInput.historyLoading = true;
+    messageInput.showErrorStatus();
+    clearChat.disabled = false;
+}
+worker.addEventListener('error', workerFailed);
+worker.addEventListener('messageerror', workerFailed);
+
 // Tool calls from the model (ThunderAI Side Panel fork: Super Productivity).
 // Reads run straight away with a short note; anything that changes data waits
 // for the user's Confirm. Results go back to the worker, which continues.
-async function handleToolCalls(calls) {
+async function handleToolCalls(calls, requestId) {
+    activeToolRequest = requestId;
     const results = [];
-    for (const call of calls || []) {
-        let args = {};
+    if (!Array.isArray(calls) || calls.length > 16) {
+        worker.postMessage({ type: 'stop' });
+        return;
+    }
+    const allowed = () => activeToolRequest === requestId && messageInput.hasToolConsent(destination);
+    for (const call of calls) {
+        if (activeToolRequest !== requestId) return;
+        if (!allowed()) {
+            results.push({ tool_call_id: call.id, content: JSON.stringify({ error: 'Task access was not granted for this conversation' }) });
+            continue;
+        }
+        let card;
         try {
-            args = call.arguments ? JSON.parse(call.arguments) : {};
-        } catch (e) {
-            results.push({ tool_call_id: call.id, content: JSON.stringify({ error: 'Invalid JSON arguments' }) });
-            continue;
-        }
-        if (!call.name?.startsWith('sp_')) {
-            results.push({ tool_call_id: call.id, content: JSON.stringify({ error: 'Unknown tool ' + call.name }) });
-            continue;
-        }
-        if (SP_WRITE_TOOLS.has(call.name)) {
-            const title = args.task_id ? await getSpTaskTitle(args.task_id) : null;
-            const { ok, card } = await messagesArea.appendConfirmCard(
-                describeSpTool(call.name, args, title),
-                browser.i18n.getMessage('sp_confirm'),
-                browser.i18n.getMessage('sp_decline'));
-            if (!ok) {
-                messagesArea.setToolOutcome(card, browser.i18n.getMessage('sp_declined'));
-                results.push({ tool_call_id: call.id, content: JSON.stringify({ cancelled: true, reason: 'The user declined this change.' }) });
-                continue;
+            const args = call.arguments ? JSON.parse(call.arguments) : {};
+            validateToolArguments(call.name, args);
+            if (SP_WRITE_TOOLS.has(call.name)) {
+                const title = args.task_id ? await getSpTaskTitle(args.task_id) : null;
+                if (!allowed()) throw new Error('Task access revoked');
+                const confirmation = await messagesArea.appendConfirmCard(describeSpTool(call.name, args, title),
+                    browser.i18n.getMessage('sp_confirm'), browser.i18n.getMessage('sp_decline'));
+                card = confirmation.card;
+                if (!allowed()) throw new Error('Task access revoked');
+                if (!confirmation.ok) {
+                    messagesArea.setToolOutcome(card, browser.i18n.getMessage('sp_declined'));
+                    results.push({ tool_call_id: call.id, content: JSON.stringify({ declined: true }) });
+                    continue;
+                }
+            } else {
+                messagesArea.appendToolNote('🔎 ' + describeSpTool(call.name, args));
             }
-            try {
-                const result = await runSpTool(call.name, args);
-                messagesArea.setToolOutcome(card, browser.i18n.getMessage('sp_done_ok'));
-                results.push({ tool_call_id: call.id, content: JSON.stringify(result) });
-            } catch (e) {
-                messagesArea.setToolOutcome(card, browser.i18n.getMessage('sp_tool_failed', [e.message]), true);
-                results.push({ tool_call_id: call.id, content: JSON.stringify({ error: e.message }) });
-            }
-        } else {
-            const note = messagesArea.appendToolNote('🔎 ' + describeSpTool(call.name, args));
-            try {
-                const result = await runSpTool(call.name, args);
-                results.push({ tool_call_id: call.id, content: JSON.stringify(result) });
-            } catch (e) {
-                note.textContent += ' — ' + browser.i18n.getMessage('sp_tool_failed', [e.message]);
-                results.push({ tool_call_id: call.id, content: JSON.stringify({ error: e.message }) });
-            }
+            if (!allowed()) throw new Error('Task access revoked');
+            const result = await runSpTool(call.name, args);
+            if (activeToolRequest !== requestId) return;
+            if (!allowed()) throw new Error('Task access revoked');
+            if (card) messagesArea.setToolOutcome(card, browser.i18n.getMessage('sp_done_ok'));
+            results.push({ tool_call_id: call.id, content: JSON.stringify(result) });
+        } catch (error) {
+            if (card) messagesArea.setToolOutcome(card, browser.i18n.getMessage('sp_tool_failed', [error.message]), true);
+            results.push({ tool_call_id: call.id, content: JSON.stringify({ error: 'Task action failed. Check the task connection and input.' }) });
         }
     }
-    worker.postMessage({ type: 'toolResults', results });
+    if (activeToolRequest === requestId) {
+        const safeResults = allowed() ? results : calls.map(call => ({ tool_call_id: call.id,
+            content: JSON.stringify({ error: 'Task access was revoked. Results were not disclosed.' }) }));
+        worker.postMessage({ type: 'toolResults', results: safeResults, requestId });
+    }
+}
+
+async function restoreEmailChat(message) {
+    const identity = message.prompt_info?.chat_history_key || call_id;
+    if (boundContextIdentity !== null) {
+        if (identity === boundContextIdentity) return;
+        // A page owns one conversation. Background selection normally opens a
+        // new page; refuse unexpected reuse while old provider work is active.
+        chatPageBlocked = true;
+        ++restoreEpoch;
+        activeToolRequest = null;
+        messageInput.revokeToolConsent();
+        messagesArea.cancelToolConfirmations();
+        worker.postMessage({ type: 'stop' });
+        await chatHistory.save();
+        chatHistory.invalidate();
+        messageInput.historyLoading = true;
+        messagesArea.appendBotMessage(browser.i18n.getMessage('chat_context_changed'), 'info');
+        return;
+    }
+    boundContextIdentity = identity;
+    const epoch = ++restoreEpoch;
+    messageInput.historyLoading = true;
+    try {
+        promptData = message;
+        const info = message.prompt_info || {};
+        const subject = info.chat_subject || browser.i18n.getMessage('chat_email_no_subject');
+        const count = Number(info.chat_count) || 1;
+        if (mztaInPanel) {
+            const title = document.getElementById('appHeaderName');
+            title.textContent = subject;
+            const modelName = document.getElementById('appHeaderModel')?.textContent;
+            title.title = modelName ? `${subject} | ${modelName}` : subject;
+        }
+        const escape = (text) => String(text).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const notice = count > 1
+            ? browser.i18n.getMessage('chat_email_notice_many', [escape(subject), String(count)])
+            : browser.i18n.getMessage('chat_email_notice_one', [escape(subject)]);
+        messagesArea.clearConversation();
+        messagesArea.appendUserMessage(notice, "info");
+        if (info.chat_history_key) {
+            const key = await historyDestinationKey(info.chat_history_key, destination);
+            if (epoch !== restoreEpoch || chatPageBlocked) return;
+            clearChat.dataset.key = key;
+            clearChat.hidden = false;
+            const historyPrefs = await browser.storage.local.get({ chat_history_retention_days: 90 });
+            if (epoch !== restoreEpoch || chatPageBlocked) return;
+            if (Number(historyPrefs.chat_history_retention_days) === 0) {
+                chatHistory.reset();
+                clearChat.hidden = true;
+            } else await chatHistory.load(key);
+            if (epoch !== restoreEpoch || chatPageBlocked) return;
+            chatHistory.setProvenance(destination);
+            for (const turn of chatHistory.turns) {
+                if (turn.role === 'user') messagesArea.appendUserMessage(turn.text);
+                if (turn.role === 'error') messagesArea.appendBotMessage(turn.text, 'error');
+                if (turn.role === 'assistant') {
+                    if (turn.thinking) messagesArea.handleNewThinkingToken(turn.thinking);
+                    if (turn.text) messagesArea.handleNewToken(turn.text);
+                    await messagesArea.handleTokensDone(promptData);
+                    if (epoch !== restoreEpoch || chatPageBlocked) return;
+                    if (turn.incomplete) messagesArea.appendUserMessage(browser.i18n.getMessage('chat_history_interrupted'), 'info');
+                }
+            }
+            worker.postMessage({ type: 'restoreHistory', history: chatHistory.history });
+        }
+        // Refresh context when replies arrive, but don't resend the same email
+        // and attachments every time an existing conversation is reopened.
+        if (chatHistory.context !== message.prompt) {
+            messageInput.setPendingContext(message.prompt);
+            messageInput.addEmailAttachments(info.chat_attachments);
+        }
+    } catch (error) {
+        if (epoch !== restoreEpoch || chatPageBlocked) return;
+        // Don't silently overwrite history that could not be read.
+        chatHistory.key = null;
+        console.error('[ThunderAI] Could not restore email chat');
+        messagesArea.appendBotMessage(browser.i18n.getMessage('chat_history_load_error'), 'error');
+        messageInput.setPendingContext(message.prompt);
+    } finally {
+        if (epoch === restoreEpoch && !chatPageBlocked) messageInput.historyLoading = false;
+    }
 }
 
 // handling commands from the backgound page
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.call_id && message.call_id !== call_id) return;
     switch (message.command) {
-        case "api_context": {
-            // Chat about an email: nothing is sent yet. The emails ride along
-            // with the user's first message (messageInput.setPendingContext).
-            promptData = message;
-            const info = message.prompt_info || {};
-            const subject = info.chat_subject || browser.i18n.getMessage('chat_email_no_subject');
-            const count = Number(info.chat_count) || 1;
-            if (mztaInPanel) {
-                const title = document.getElementById('appHeaderName');
-                title.textContent = subject;
-                const modelName = document.getElementById('appHeaderModel')?.textContent;
-                title.title = modelName ? `${subject} — ${modelName}` : subject;
-            }
-            const escape = (text) => String(text).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-            const notice = count > 1
-                ? browser.i18n.getMessage('chat_email_notice_many', [escape(subject), String(count)])
-                : browser.i18n.getMessage('chat_email_notice_one', [escape(subject)]);
-            messagesArea.appendUserMessage(notice, "info");
-            messageInput.setPendingContext(message.prompt);
-            messageInput.addEmailAttachments(info.chat_attachments);
-            break;
-        }
+        case 'email_chat_invalidated':
+            if (chatHistory.key !== message.key) return;
+            chatHistory.invalidate();
+            chatPageBlocked = true;
+            ++restoreEpoch;
+            activeToolRequest = null;
+            worker.postMessage({ type: 'stop' });
+            messagesArea.clearConversation();
+            messageInput.historyLoading = true;
+            messagesArea.appendBotMessage(browser.i18n.getMessage('chat_history_deleted_elsewhere'), 'info');
+            return;
+        case "api_context":
+            return restoreEmailChat(message);
         case "api_send":
             promptData = message;
             //send the received prompt to the llm api

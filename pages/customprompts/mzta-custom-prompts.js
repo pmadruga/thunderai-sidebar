@@ -1,3 +1,4 @@
+import { getSecureSettings, setSecureSettings } from '../../js/secure-settings.js';
 /*
  *  ThunderAI [https://micz.it/thunderbird-addon-thunderai/]
  *  Copyright (C) 2024 - 2026  Mic (m@micz.it)
@@ -76,7 +77,7 @@ let activePlaceholders = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
 
-    let storedPrefs = await browser.storage.sync.get(null);
+    let storedPrefs = await getSecureSettings(null);
     prefs = { ...prefs_default, ...storedPrefs };
     taLog = new taLogger("mzta-custom-prompts", prefs.do_debug);
     
@@ -2061,7 +2062,7 @@ async function saveAll() {
             // console.log(">>>>>>>>>>>>>>>> item: " + JSON.stringify(item))
             return item.values();
         });
-        taLog.log('newPrompts: ' + JSON.stringify(newPrompts));
+        taLog.log('Saving prompt configuration');
         // newPrompts.forEach(prompt => {
         //     console.log('>>>>>>>>>>>>> id: ' + JSON.stringify(prompt));
         // });

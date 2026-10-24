@@ -18,6 +18,9 @@
 
 // Some original methods derived from https://github.com/ali-raheem/Aify/blob/4ece286095ea7a6cf89d696902e6b81b5d1c3a4b/plugin/html/API.js
 
+import { redactApiError } from './api-utils.js';
+import { secureFetch } from '../endpoint-policy.js';
+
 import {
   getAnthropicModelCapabilities,
   ANTHROPIC_EFFORT_LEVELS,
@@ -60,10 +63,11 @@ export class Anthropic {
   }
 
 
-  fetchModels = async () => {
+  fetchModels = async (signal) => {
     try{
-      const response = await fetch("https://api.anthropic.com/v1/models", {
+      const response = await secureFetch("https://api.anthropic.com/v1/models", {
           method: "GET",
+          signal,
           headers: {
               "Content-Type": "application/json",
               "x-api-key": this.apiKey,
@@ -74,10 +78,10 @@ export class Anthropic {
       if (!response.ok) {
           const errorDetail = await response.text();
           let err_msg = "[ThunderAI] Claude API request failed: " + response.status + " " + response.statusText + ", Detail: " + errorDetail;
-          console.error(err_msg);
+          console.error("[ThunderAI] Provider rejected the models request");
           let output = {};
           output.ok = false;
-          output.error = errorDetail;
+          output.error = redactApiError(errorDetail, this.apiKey);
           return output;
       }
 
@@ -88,16 +92,17 @@ export class Anthropic {
 
       return output;
     }catch (error) {
-      console.error("[ThunderAI] Claude API request failed: " + error);
+        if (error?.name === 'AbortError') throw error;
+      console.error("[ThunderAI] Claude API request failed: ");
       let output = {};
       output.is_exception = true;
       output.ok = false;
-      output.error = "Claude API request failed: " + error;
+      output.error = "Claude API request failed: " + redactApiError(error, this.apiKey);
       return output;
     }
   }
 
-  fetchResponse = async (messages) => {
+  fetchResponse = async (messages, { signal } = {}) => {
 
     try {
 
@@ -153,8 +158,9 @@ export class Anthropic {
 
       // console.log(">>>>>>>>>>>>>>>>> [ThunderAI] Anthropic API request: " + JSON.stringify(claude_body));
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await secureFetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
+            signal,
           headers: { 
               "Content-Type": "application/json", 
               "x-api-key": this.apiKey,
@@ -165,11 +171,12 @@ export class Anthropic {
       });
       return response;
     }catch (error) {
-        console.error("[ThunderAI] Claude API request failed: " + error);
+        if (error?.name === 'AbortError') throw error;
+        console.error("[ThunderAI] Claude API request failed: ");
         let output = {};
         output.is_exception = true;
         output.ok = false;
-        output.error = "Claude API request failed: " + error;
+        output.error = "Claude API request failed: " + redactApiError(error, this.apiKey);
         return output;
     }
   }

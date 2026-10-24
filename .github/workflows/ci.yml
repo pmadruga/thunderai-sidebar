@@ -1,0 +1,47 @@
+name: Validate fork
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Test JavaScript and release packager
+        run: |
+          node --test tests/*.test.mjs
+          python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Validate manifest, experiment schemas, source and vendor inventory
+        run: python3 scripts/check_repository.py
+      - name: Verify deterministic development package
+        run: |
+          ./build-side-panel.sh --output /tmp/first.xpi
+          ./build-side-panel.sh --output /tmp/second.xpi
+          cmp /tmp/first.xpi /tmp/second.xpi
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install checksum-verified Gitleaks
+        run: bash scripts/install-gitleaks.sh "$RUNNER_TEMP/gitleaks"
+      - name: Scan reachable history and publication files with redacted output
+        run: python3 scripts/scan-secrets.py --binary "$RUNNER_TEMP/gitleaks/gitleaks"

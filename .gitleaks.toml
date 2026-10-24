@@ -1,0 +1,16 @@
+title = "ThunderAI Side Panel secret scanning"
+[extend]
+useDefault = true
+
+# Exact localization-template lines inherited from upstream commit
+# 5efdf915700f7c03416e0fdd41e48ceabc43ee88. Gitleaks mistakes translated
+# permission placeholders for API keys. These are not credentials.
+[[allowlists]]
+description = "Upstream permission localization placeholders, verified non-secret"
+condition = "AND"
+regexTarget = "line"
+paths = ['''(?:^|/)(?:pages/onboarding/onboarding\.html|popup/mzta-popup\.html)$''']
+regexes = [
+  '''^\s*<div\ id="anthropic_api_permission">__MSG_ask_anthropic_api_permission_1__\s*$''',
+  '''^\s*<div\ id="ask_anthropic_api_perm">__MSG_ask_anthropic_api_permission_1__\s*$''',
+]

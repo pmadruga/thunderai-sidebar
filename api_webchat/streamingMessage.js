@@ -97,8 +97,8 @@ function renderResponse(raw) {
 // A flush routinely lands mid-tag, so the whole response is re-rendered each time
 // - O(n) per flush, O(n^2) over a response, on top of the DOMParser pass
 // messagesArea does on the result. Rendering every ~2 KB instead of every '\n'
-// keeps the output identical (the final flush always renders everything) while
-// making the cost proportional to the answer's size rather than to its line count.
+// is the initial minimum. The budget then grows with the rendered prefix,
+// bounding total reparsing work; the final flush always renders everything.
 // Between renders the live token spans messagesArea appends still show the text
 // arriving.
 const HTML_RENDER_CHUNK = 2048;
@@ -127,6 +127,7 @@ export class StreamingMessage {
         // Characters appended to _htmlRawText since the last render. Drives the
         // HTML_RENDER_CHUNK coalescing in flush().
         this._htmlPendingChars = 0;
+        this._renderBudget = HTML_RENDER_CHUNK;
     }
 
     handleNewToken(token) {
@@ -171,7 +172,7 @@ export class StreamingMessage {
         // render until the closing tag arrives — tokens stay in the DOM as raw
         // fading spans, but the partial <think> content is never sent through the
         // renderer or promoted to the final thinking block.
-        if (OPEN_THINK_RE.test(fullText) && !CLOSE_THINK_RE.test(fullText)) {
+        if (!final && OPEN_THINK_RE.test(fullText) && !CLOSE_THINK_RE.test(fullText)) {
             return null;
         }
 
@@ -184,7 +185,7 @@ export class StreamingMessage {
         // response, so the space opening it is interior to the answer once appended to
         // _htmlRawText below. Trimming it welds the last word of the previous segment to
         // the first word of this one ("the" + " body" -> "thebody").
-        const stripped = stripThinkTags(fullText);
+        const stripped = stripThinkTags(fullText, final);
         if (stripped.thinking) {
             this._inlineThinking += (this._inlineThinking ? '\n' : '') + stripped.thinking;
         }
@@ -214,7 +215,7 @@ export class StreamingMessage {
         // and renders no thinking block, keeping the live "Thinking..." indicator
         // instead. The reasoning is safe in the running totals and the next
         // non-deferred flush hands back the whole of it.
-        if (!final && this._htmlPendingChars < HTML_RENDER_CHUNK) {
+        if (!final && this._htmlPendingChars < this._renderBudget) {
             return {
                 html: '',
                 thinkingText: '',
@@ -230,6 +231,9 @@ export class StreamingMessage {
         // concatenated.
         this._fullTextHTML = renderResponse(this._htmlRawText);
         this._htmlPendingChars = 0;
+        // Grow the interval with the already rendered prefix. Geometric
+        // checkpoints bound cumulative reparsing while token spans stay live.
+        this._renderBudget = Math.max(HTML_RENDER_CHUNK, Math.ceil(this._htmlRawText.length / 4));
         return {
             html: this._fullTextHTML,
             thinkingText: combinedThinking,

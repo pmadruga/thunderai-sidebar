@@ -25,7 +25,14 @@
         "type": "function",
         "async": true,
         "description": "Closes the side panel in every window.",
-        "parameters": []
+        "parameters": [
+          {
+            "name": "windowId",
+            "type": "integer",
+            "minimum": 0,
+            "optional": true
+          }
+        ]
       },
       {
         "name": "getTheme",
@@ -63,6 +70,78 @@
             "name": "messageId",
             "type": "integer",
             "minimum": 1
+          }
+        ]
+      },
+      {
+        "name": "createChatHistoryKey",
+        "type": "function",
+        "async": true,
+        "description": "Creates a key for encrypted local chat history in Thunderbird\u2019s key store.",
+        "parameters": [
+          {
+            "name": "keyId",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "encryptChatHistory",
+        "type": "function",
+        "async": true,
+        "description": "Encrypts local chat history. Never falls back to plaintext.",
+        "parameters": [
+          {
+            "name": "keyId",
+            "type": "string"
+          },
+          {
+            "name": "text",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "decryptChatHistory",
+        "type": "function",
+        "async": true,
+        "description": "Decrypts local chat history using its existing key.",
+        "parameters": [
+          {
+            "name": "keyId",
+            "type": "string"
+          },
+          {
+            "name": "ciphertext",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "getChatThreadRoots",
+        "type": "function",
+        "async": true,
+        "description": "Stable RFC Message-IDs for the roots of selected email threads, without reading message bodies.",
+        "parameters": [
+          {
+            "name": "messageIds",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      },
+      {
+        "name": "deleteChatHistoryKey",
+        "type": "function",
+        "async": true,
+        "description": "Deletes an unused local chat-history key after all its encrypted records have been removed.",
+        "parameters": [
+          {
+            "name": "keyId",
+            "type": "string"
           }
         ]
       }

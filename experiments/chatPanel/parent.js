@@ -29,6 +29,8 @@
 
 "use strict";
 
+Components.utils.importGlobalProperties(['TextEncoder', 'TextDecoder']);
+
 var { ExtensionParent } = ChromeUtils.importESModule(
   "resource://gre/modules/ExtensionParent.sys.mjs"
 );
@@ -225,8 +227,40 @@ this.chatPanel = class extends ExtensionAPI {
           return messages;
         },
 
-        async close() {
-          for (const win of allMailWindows()) {
+        async getChatThreadRoots(messageIds) {
+          return messageIds.map(id => {
+            const hdr = extension.messageManager.get(id);
+            if (!hdr) throw new ExtensionError("Email not found");
+            return hdr.numReferences ? hdr.getStringReference(0) : hdr.messageId;
+          });
+        },
+
+        async createChatHistoryKey(keyId) {
+          const { store, label } = chatKeyStore(keyId);
+          if (!(await store.asyncSecretAvailable(label))) await store.asyncGenerateSecret(label);
+        },
+
+        async encryptChatHistory(keyId, text) {
+          const { store, label } = chatKeyStore(keyId);
+          if (!(await store.asyncSecretAvailable(label))) throw new Error("Chat history key unavailable");
+          return store.asyncEncryptBytes(label, Array.from(new TextEncoder().encode(text)));
+        },
+
+        async decryptChatHistory(keyId, ciphertext) {
+          const { store, label } = chatKeyStore(keyId);
+          if (!(await store.asyncSecretAvailable(label))) throw new Error("Chat history key unavailable");
+          const bytes = await store.asyncDecryptBytes(label, ciphertext);
+          return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(bytes));
+        },
+
+        async deleteChatHistoryKey(keyId) {
+          const { store, label } = chatKeyStore(keyId);
+          if (await store.asyncSecretAvailable(label)) await store.asyncDeleteSecret(label);
+        },
+
+        async close(windowId) {
+          const windows = windowId === undefined ? allMailWindows() : [extension.windowManager.get(windowId, context)?.window].filter(Boolean);
+          for (const win of windows) {
             removePanel(win.document);
           }
         },
@@ -241,5 +275,16 @@ this.chatPanel = class extends ExtensionAPI {
     for (const win of allMailWindows()) {
       removePanel(win.document);
     }
+    Services.obs.notifyObservers(null, "startupcache-invalidate");
   }
 };
+
+// Use the native byte API: the convenience string decoder is unsuitable for
+// large transcripts and returns a binary string rather than decoded UTF-8.
+function chatKeyStore(keyId) {
+  if (!/^[a-f0-9-]{36}$/.test(keyId)) throw new Error("Invalid chat history key ID");
+  return {
+    store: Cc["@mozilla.org/security/oskeystore;1"].getService(Ci.nsIOSKeyStore),
+    label: "ThunderAI Chat History " + keyId,
+  };
+}

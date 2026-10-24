@@ -18,6 +18,9 @@
 
 // Some original methods derived from https://github.com/ali-raheem/Aify/blob/4ece286095ea7a6cf89d696902e6b81b5d1c3a4b/plugin/html/API.js
 
+import { redactApiError } from './api-utils.js';
+import { secureFetch } from '../endpoint-policy.js';
+
 import { parseExtraBody } from './api-utils.js';
 
 
@@ -50,7 +53,7 @@ export class OpenAIComp {
   }
 
 
-  fetchModels = async () => {
+  fetchModels = async (signal) => {
     const curr_headers = {
       "Content-Type": "application/json",
     };
@@ -61,18 +64,19 @@ export class OpenAIComp {
       curr_headers['X-Title'] = 'ThunderAI';
     }
 
-    const response = await fetch(this.host + (this.use_v1 ? "/v1" : "") + "/models", {
+    const response = await secureFetch(this.host + (this.use_v1 ? "/v1" : "") + "/models", {
         method: "GET",
+          signal,
         headers: curr_headers,
     });
 
     if (!response.ok) {
         const errorDetail = await response.text();
         let err_msg = "[ThunderAI] OpenAI Comp API request failed: " + response.status + " " + response.statusText + ", Detail: " + errorDetail;
-        console.error(err_msg);
+        console.error("[ThunderAI] Provider rejected the models request");
         let output = {};
         output.ok = false;
-        output.error = errorDetail;
+        output.error = redactApiError(errorDetail, this.apiKey);
         return output;
     }
 
@@ -86,11 +90,11 @@ export class OpenAIComp {
 
   // Context window size, from llama.cpp's /props (ThunderAI Side Panel fork).
   // Other servers don't report it: resolves to null.
-  fetchContextSize = async () => {
+  fetchContextSize = async ({ signal } = {}) => {
     try {
       const headers = {};
       if(this.apiKey !== '') headers["Authorization"] = "Bearer "+ this.apiKey;
-      const response = await fetch(this.host.replace(/\/v1$/, '') + "/props", { headers });
+      const response = await secureFetch(this.host.replace(/\/v1$/, '') + "/props", { headers, signal });
       if (!response.ok) return null;
       const props = await response.json();
       const nCtx = props?.default_generation_settings?.n_ctx ?? props?.n_ctx;
@@ -100,7 +104,7 @@ export class OpenAIComp {
     }
   }
 
-  fetchResponse = async (messages, maxTokens = 0, tools = null) => {
+  fetchResponse = async (messages, maxTokens = 0, tools = null, { signal } = {}) => {
     try{
       const tempFloat = parseFloat(this.temperature);
       const curr_headers = {
@@ -109,8 +113,9 @@ export class OpenAIComp {
       if(this.apiKey !== '') curr_headers["Authorization"] = "Bearer "+ this.apiKey;
 
       try {
-        const response = await fetch(this.host + (this.use_v1 ? "/v1" : "") + "/chat/completions", {
+        const response = await secureFetch(this.host + (this.use_v1 ? "/v1" : "") + "/chat/completions", {
             method: "POST",
+            signal,
             headers: curr_headers,
             // The user-supplied extra data is spread first on purpose: every
             // parameter ThunderAI manages must win over it, so a wrong entry
@@ -130,19 +135,21 @@ export class OpenAIComp {
         });
         return response;
       }catch (error) {
-          console.error("[ThunderAI] OpenAI Comp API request failed: " + error);
+        if (error?.name === 'AbortError') throw error;
+          console.error("[ThunderAI] OpenAI Comp API request failed: ");
           let output = {};
           output.is_exception = true;
           output.ok = false;
-          output.error = "OpenAI Comp API request failed: " + error;
+          output.error = "OpenAI Comp API request failed: " + redactApiError(error, this.apiKey);
           return output;
       }
     }catch (error) {
-        console.error("[ThunderAI] OpenAI Comp API request failed: " + error);
+        if (error?.name === 'AbortError') throw error;
+        console.error("[ThunderAI] OpenAI Comp API request failed: ");
         let output = {};
         output.is_exception = true;
         output.ok = false;
-        output.error = "OpenAI Comp API request failed: " + error;
+        output.error = "OpenAI Comp API request failed: " + redactApiError(error, this.apiKey);
         return output;
     }
   }

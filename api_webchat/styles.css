@@ -384,3 +384,18 @@ p {
 :root.in-panel #appHeaderModel[hidden] {
     display: none !important;
 }
+
+#clearEmailChat {
+    align-self: flex-end;
+    margin: 0 16px 4px;
+    padding: 3px 8px;
+    color: var(--ink-2);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+#clearEmailChat[hidden] { display: none; }
+#clearEmailChat:disabled { opacity: 0.5; cursor: default; }

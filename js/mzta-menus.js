@@ -1,3 +1,4 @@
+import { getSecureSettings, setSecureSettings, promptStorage } from './secure-settings.js';
 /*
  *  ThunderAI [https://micz.it/thunderbird-addon-thunderai/]
  *  Copyright (C) 2024 - 2026  Mic (m@micz.it)
@@ -163,10 +164,6 @@ export class mzta_Menus {
             const raw_html = await browser.tabs.sendMessage(tabs[0].id, { command: "getFullHtml" });
             // Raw values as they arrive from the content script, before the twins
             // rewrite them. JSON.stringify() so newlines/escapes stay visible. [#829]
-            this.logger.log("getMailBody raw_text: " + JSON.stringify(raw_text));
-            this.logger.log("getMailBody raw_html: " + JSON.stringify(raw_html));
-            this.logger.log("getMailBody raw_selection: " + JSON.stringify(raw_selection));
-            this.logger.log("getMailBody raw_selection_html: " + JSON.stringify(raw_selection_html));
 
             // Hoisted out of the object literal below, because the ORDER of the
             // next two calls is load-bearing.
@@ -181,7 +178,6 @@ export class mzta_Menus {
             const raw_only_typed_html = do_autoselect
                 ? await browser.tabs.sendMessage(tabs[0].id, { command: "getSelectedHtml" })
                 : '';
-            this.logger.log("getMailBody raw_only_typed_html: " + JSON.stringify(raw_only_typed_html));
             // Paragraph-preserving: these carry the mail the user typed, and the
             // blank line between greeting and body is part of it. Computed once:
             // only_typed_html falls back to this same value, and the two are twins. [#829]
@@ -331,10 +327,8 @@ export class mzta_Menus {
                     try {
                         msg_text.plain_part = (await getMailInlineTextParts(curr_message.id)).text;
                     } catch (e) {
-                        this.logger.log("mail_plain_text_part: unable to read the original text/plain part: " + e);
                     }
                 }
-                this.logger.log("mail_plain_text_part: " + JSON.stringify(msg_text.plain_part));
             }
 
             fullPrompt = await taPromptUtils.preparePrompt({
@@ -360,7 +354,7 @@ export class mzta_Menus {
             
             switch(curr_prompt.id){
                 case 'prompt_translate_this':
-                    let prefs2 = await browser.storage.sync.get({default_chatgpt_lang: getLanguageDisplayName(browser.i18n.getUILanguage()), translate_lang: ''});
+                    let prefs2 = await getSecureSettings({default_chatgpt_lang: getLanguageDisplayName(browser.i18n.getUILanguage()), translate_lang: ''});
                     let chatgpt_lang2 = prefs2.translate_lang || prefs2.default_chatgpt_lang;
                     if(chatgpt_lang2 === ''){
                         chatgpt_lang2 = getLanguageDisplayName(browser.i18n.getUILanguage());
@@ -382,7 +376,7 @@ export class mzta_Menus {
                     case 'prompt_add_tags': {   // Add tags to the email
                         let tags_current_email = [];
                         let tags_current_email_final = [];
-                        let prefs_at = await browser.storage.sync.get({
+                        let prefs_at = await getSecureSettings({
                             add_tags_maxnum: prefs_default.add_tags_maxnum,
                             connection_type: prefs_default.connection_type,
                             add_tags_force_lang: prefs_default.add_tags_force_lang,
@@ -398,7 +392,6 @@ export class mzta_Menus {
                             return {ok:'0'};
                         }
                         fullPrompt = taPromptUtils.finalizePrompt_add_tags(fullPrompt, prefs_at.add_tags_maxnum, prefs_at.add_tags_force_lang, prefs_at.default_chatgpt_lang);
-                        this.logger.log("fullPrompt: " + fullPrompt);
                         let create_new_tags = !prefs_at.add_tags_auto_force_existing;
                         let all_tags_list = tags_full_list[1];
                         // COMMENTED TO DO TESTS
@@ -444,7 +437,7 @@ export class mzta_Menus {
                     case 'prompt_get_calendar_event':                   // Get a calendar event info
                     case 'prompt_get_calendar_event_from_clipboard': {  // here from clipboard
                         let calendar_event_data = '';
-                        let prefs_at = await browser.storage.sync.get({
+                        let prefs_at = await getSecureSettings({
                             connection_type: prefs_default.connection_type,
                             calendar_enforce_timezone: prefs_default.calendar_enforce_timezone,
                             calendar_timezone: prefs_default.calendar_timezone,
@@ -467,7 +460,6 @@ export class mzta_Menus {
                         *  } 
                         */
                         fullPrompt = taPromptUtils.finalizePrompt_get_calendar_event(fullPrompt);
-                        this.logger.log("fullPrompt: " + fullPrompt);
                         let cmd_GetCalendarEvent = new mzta_specialCommand({
                             prompt: fullPrompt,
                             llm: def_conntype,
@@ -488,7 +480,7 @@ export class mzta_Menus {
                         try{
                             calendar_event_data_obj = extractJsonObject(calendar_event_data);
                         }catch(err){
-                            console.error("[ThunderAI] Error extracting JSON object from calendar event data: ", err.message);
+                            console.error("[ThunderAI] Invalid calendar event response");
                             browser.tabs.sendMessage(tabs[0].id, { command: "sendAlert", curr_tab_type: tabs[0].type, message: browser.i18n.getMessage("calendar_getting_data_error") + ": " + err.message });
                             taWorkingStatus.stopWorking();
                             return {ok:'0'};
@@ -534,7 +526,7 @@ export class mzta_Menus {
                     }
                     case 'prompt_get_task': {  // Get a task info
                         let task_data = '';
-                        let prefs_at = await browser.storage.sync.get({
+                        let prefs_at = await getSecureSettings({
                             connection_type: prefs_default.connection_type,
                             calendar_enforce_timezone: prefs_default.calendar_enforce_timezone,
                             calendar_timezone: prefs_default.calendar_timezone,
@@ -554,7 +546,6 @@ export class mzta_Menus {
                         *   "location": "YourLocation"
                         *  } 
                         */
-                        this.logger.log("fullPrompt: " + fullPrompt);
                         let cmd_GetTask = new mzta_specialCommand({
                             prompt: fullPrompt,
                             llm: def_conntype,
@@ -588,7 +579,7 @@ export class mzta_Menus {
                                 delete task_data_obj.initialDate;
                             }
                         }catch(err){
-                            console.error("[ThunderAI] Error extracting JSON object from task data: ", err.message);
+                            console.error("[ThunderAI] Invalid task response");
                             browser.tabs.sendMessage(tabs[0].id, { command: "sendAlert", curr_tab_type: tabs[0].type, message: browser.i18n.getMessage("task_getting_data_error") + ": " + err.message });
                             taWorkingStatus.stopWorking();
                             return {ok:'0'};
@@ -632,14 +623,7 @@ export class mzta_Menus {
                         break;
                 }
             }else{  // Classic prompts for the API webchat
-                this.logger.log("fullPrompt: " + fullPrompt);
-                this.logger.log("curr_prompt: " + JSON.stringify(curr_prompt, (key, value) => {
-                    if (typeof key === 'string' && key.endsWith('_api_key')) {
-                        return '****************';
-                    }
-                    return value;
-                    })
-                );
+
                 this.openChatGPT(fullPrompt, curr_prompt.action, tabs[0].id, curr_prompt.name, curr_prompt.need_custom_text, curr_prompt);
                 taWorkingStatus.stopWorking();
                 return {ok:'1'};

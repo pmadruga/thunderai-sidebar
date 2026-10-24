@@ -27,7 +27,7 @@ import { extractDocumentText, isSupportedDocument, UnsupportedDocumentError } fr
 // Email attachments added to an email chat on their own (more can be added by hand).
 const MAX_EMAIL_ATTACHMENTS = 5;
 const MAX_EMAIL_ATTACHMENT_BYTES = 25 * 1024 * 1024;
-import { getSpSettings, saveSpSettings, verifySpConnection, spToolDefinitions, spOriginPattern } from './superproductivity.js';
+import { getSpSettings, saveSpSettings, verifySpConnection, spToolDefinitions, spOriginPattern, requestToolReadConsent } from './superproductivity.js';
 
 // Tools need the OpenAI-compatible connection (the only worker with tool calls).
 const mztaToolsSupported = new URLSearchParams(window.location.search).get('llm') === 'openai_comp_api';
@@ -54,6 +54,45 @@ messagesInputStyle.textContent = SHARED_BASE_CSS + `
     :host(.drag-over) {
         background: var(--accent-soft);
     }
+
+    #modelControls {
+        display: flex;
+        flex-basis: 100%;
+        order: -2;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        font-size: .75rem;
+        color: var(--ink-2);
+        flex-wrap: wrap;
+    }
+    #modelControls[hidden] { display: none; }
+    #modelSelect {
+        flex: 1;
+        min-width: 0;
+        width: 0;
+        padding: 4px 6px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        background: var(--surface);
+        color: var(--ink);
+        font: inherit;
+    }
+    #modelRefresh {
+        border: none;
+        border-radius: var(--r-sm);
+        background: transparent;
+        color: var(--ink-2);
+        padding: 4px 8px;
+        cursor: pointer;
+        font: inherit;
+    }
+    #modelRefresh:hover:not(:disabled) { background: var(--hover); }
+    #modelSelect:focus-visible, #modelRefresh:focus-visible {
+        outline: 2px solid var(--accent);
+    }
+    #modelSelect:disabled, #modelRefresh:disabled { opacity: .5; }
+    #modelListStatus { flex-basis: 100%; }
 
     /* Context meter (ThunderAI Side Panel fork): used / total tokens */
     #contextMeter {
@@ -303,7 +342,7 @@ messagesInputStyle.textContent = SHARED_BASE_CSS + `
     }
     /* Fixed-size centring box for the pill's leading icon. The states use
        several icon sizes (alert 13, check 15, waiting/loading 16), so the wrapper
-       is sized to the largest and centres whatever it holds — that way swapping
+       is sized to the largest and centres whatever it holds - that way swapping
        states never shifts the pill's height or the text beside it. */
     #statusLoggerIcon{
         display: inline-flex;
@@ -442,6 +481,27 @@ messagesInputStyle.textContent = SHARED_BASE_CSS + `
 `;
 messageInputTemplate.content.appendChild(messagesInputStyle);
 
+const modelControls = document.createElement('div');
+modelControls.id = 'modelControls';
+modelControls.hidden = true;
+const modelLabel = document.createElement('label');
+modelLabel.htmlFor = 'modelSelect';
+modelLabel.textContent = browser.i18n.getMessage('chat_model_label');
+const modelSelect = document.createElement('select');
+modelSelect.id = 'modelSelect';
+const modelRefresh = document.createElement('button');
+modelRefresh.id = 'modelRefresh';
+modelRefresh.type = 'button';
+modelRefresh.textContent = '↻';
+modelRefresh.title = browser.i18n.getMessage('chat_model_refresh');
+modelRefresh.setAttribute('aria-label', modelRefresh.title);
+const modelListStatus = document.createElement('span');
+modelListStatus.id = 'modelListStatus';
+modelListStatus.setAttribute('role', 'status');
+modelListStatus.hidden = true;
+modelControls.append(modelLabel, modelSelect, modelRefresh, modelListStatus);
+messageInputTemplate.content.appendChild(modelControls);
+
 // A textarea, not an input: the field grows from one to three lines as the text
 // wraps (see the #messageInputField rule and _autoResize below), then scrolls.
 const attachButton = document.createElement('button');
@@ -560,6 +620,10 @@ class MessageInput extends HTMLElement {
         this._statusLogger = shadowRoot.querySelector('#statusLogger');
         this._statusLoggerIcon = shadowRoot.querySelector('#statusLoggerIcon');
         this._statusLoggerText = shadowRoot.querySelector('#statusLoggerText');
+        this._modelControls = shadowRoot.querySelector('#modelControls');
+        this._modelSelect = shadowRoot.querySelector('#modelSelect');
+        this._modelRefresh = shadowRoot.querySelector('#modelRefresh');
+        this._modelListStatus = shadowRoot.querySelector('#modelListStatus');
 
         // Super Productivity toggle
         this._spToggle = shadowRoot.querySelector('#spToggle');
@@ -569,6 +633,7 @@ class MessageInput extends HTMLElement {
 
         // Document attachments
         this._attachments = [];
+        this._pageHideHandler = () => this._clearAttachments();
         this._attachButton = shadowRoot.querySelector('#attachButton');
         this._attachInput = shadowRoot.querySelector('#attachInput');
         this._attachmentChips = shadowRoot.querySelector('#attachmentChips');
@@ -614,6 +679,15 @@ class MessageInput extends HTMLElement {
     connectedCallback() {
         // Set focus to the input field when the element is added to the DOM
         this._messageInputField.focus();
+        window.addEventListener('pagehide', this._pageHideHandler);
+    }
+
+    disconnectedCallback() {
+        window.removeEventListener('pagehide', this._pageHideHandler);
+        this._clearAttachments();
+        this._spEnableEpoch = (this._spEnableEpoch || 0) + 1;
+        this._setSpState(false);
+        clearTimeout(this._doneTimeout);
     }
 
     async init(worker) {
@@ -653,18 +727,26 @@ class MessageInput extends HTMLElement {
         // Cached so a click can ask for the permission before any await (the
         // permission prompt is only allowed directly inside a user action).
         this._spOrigin = spOriginPattern(settings.url);
-        // Remembered as on: enable quietly if permission and token still work.
-        if (settings.enabled && settings.token) {
-            const allowed = await browser.permissions.contains({ origins: [this._spOrigin] });
-            if (allowed) {
-                try {
-                    await verifySpConnection();
-                    this._setSpState(true);
-                } catch (e) {
-                    // Leave it off; the user can switch it on to see the error.
-                }
-            }
-        }
+        // Tool disclosure is required separately in every chat.
+    }
+
+    setProviderDestination({ integration, endpoint }) {
+        const destination = JSON.stringify([integration || '', endpoint || '']);
+        if (this._providerDestination?.key === destination) return;
+        this._providerDestination = { key: destination, integration, endpoint };
+        this._spEnableEpoch = (this._spEnableEpoch || 0) + 1;
+        this._setSpState(false);
+        this._closeSpSetup();
+    }
+
+    revokeToolConsent() {
+        this._spEnableEpoch = (this._spEnableEpoch || 0) + 1;
+        this._setSpState(false);
+        this._closeSpSetup();
+    }
+
+    hasToolConsent(destination) {
+        return this._spOn && this._providerDestination?.key === JSON.stringify([destination?.integration || '', destination?.endpoint || '']);
     }
 
     _setSpState(on) {
@@ -683,6 +765,7 @@ class MessageInput extends HTMLElement {
 
     async _toggleSuperProductivity() {
         if (this._spOn) {
+            this._spEnableEpoch = (this._spEnableEpoch || 0) + 1;
             this._setSpState(false);
             await saveSpSettings({ sp_enabled: false });
             this._closeSpSetup();
@@ -698,12 +781,18 @@ class MessageInput extends HTMLElement {
     }
 
     async _enableSuperProductivity(permission) {
+        const epoch = this._spEnableEpoch = (this._spEnableEpoch || 0) + 1;
+        const destination = this._providerDestination;
         try {
             if (!(await permission)) {
                 throw new Error(browser.i18n.getMessage('sp_error_permission'));
             }
+            if (!destination || epoch !== this._spEnableEpoch) return false;
+            if (!requestToolReadConsent(destination.integration, destination.endpoint)) return false;
             await verifySpConnection();
+            if (epoch !== this._spEnableEpoch) return false;
         } catch (e) {
+            if (epoch !== this._spEnableEpoch) return false;
             const message = e.code === 'UNAUTHORIZED'
                 ? browser.i18n.getMessage('sp_error_token')
                 : e.code === 'UNREACHABLE' ? browser.i18n.getMessage('sp_error_unreachable') : e.message;
@@ -711,7 +800,7 @@ class MessageInput extends HTMLElement {
             return false;
         }
         this._closeSpSetup();
-        await saveSpSettings({ sp_enabled: true });
+        if (epoch !== this._spEnableEpoch) return false;
         this._setSpState(true);
         return true;
     }
@@ -774,6 +863,63 @@ class MessageInput extends HTMLElement {
         this._stopButton.title = browser.i18n.getMessage("chagpt_api_send_button") + ": " + this.model;
     }
 
+    configureModels(loadModels, onChange) {
+        this._modelControls.hidden = false;
+        this._availableModels = [];
+        this._modelSelect.addEventListener('change', () => {
+            if (this._messageInputField.disabled || this._modelsLoading) return;
+            const model = this._modelSelect.value;
+            if (model && model !== this.model) {
+                onChange(model);
+                this._modelSelect.title = model;
+            }
+        });
+        const refresh = async () => {
+            if (this._modelsLoading || this._messageInputField.disabled) return;
+            this._modelsLoading = true;
+            this._renderModels();
+            this._modelListStatus.hidden = false;
+            this._modelListStatus.textContent = browser.i18n.getMessage('chat_model_loading');
+            try {
+                this._availableModels = await loadModels();
+                this._modelListStatus.textContent = this._availableModels.length
+                    ? '' : browser.i18n.getMessage('chat_model_empty');
+            } catch {
+                this._modelListStatus.textContent = browser.i18n.getMessage('chat_model_error');
+            } finally {
+                this._modelsLoading = false;
+                this._modelListStatus.hidden = !this._modelListStatus.textContent;
+                this._renderModels();
+            }
+        };
+        this._modelRefresh.addEventListener('click', refresh);
+        refresh();
+    }
+
+    _renderModels() {
+        const models = [...this._availableModels];
+        // Keep manually configured models usable when discovery isn't supported.
+        if (!models.some(m => m.id === this.model)) {
+            models.unshift({ id: this.model || '', label: this.model || browser.i18n.getMessage('chat_model_label') });
+        }
+        this._modelSelect.replaceChildren(...models.map(model => {
+            const option = document.createElement('option');
+            option.value = model.id;
+            option.textContent = model.label;
+            option.title = model.id;
+            return option;
+        }));
+        this._modelSelect.value = this.model || '';
+        this._modelSelect.title = this.model || '';
+        this._updateModelControls();
+    }
+
+    _updateModelControls() {
+        const busy = this._modelsLoading || this._messageInputField.disabled;
+        this._modelSelect.disabled = !!busy;
+        this._modelRefresh.disabled = !!busy;
+    }
+
     handleMessageSent() {
         // console.log("[ThunderAI] handleMessageSent");
         this._messageInputField.value = '';
@@ -785,6 +931,7 @@ class MessageInput extends HTMLElement {
         this._messageInputField.value = '';
         this._autoResize();
         this._messageInputField.removeAttribute('disabled');
+        this._updateModelControls();
         this._sendButton.removeAttribute('disabled');
         this._sendButton.style.display = 'block';
         this._stopButton.setAttribute('disabled', 'disabled');
@@ -936,6 +1083,11 @@ class MessageInput extends HTMLElement {
     }
 
     _handleNewChatMessage() {
+        if (this.historyLoading || this._messageInputField.disabled) return;
+        if (this._attachments.some(item => item.status === 'reading')) {
+            this.showErrorStatus('Please wait for attachments to finish reading, or remove them.');
+            return;
+        }
         //do nothing if input is empty
         if ((!this._messageInputField.value)||(this._messageInputField.value.trim().length === 0)) {
             return;
@@ -946,6 +1098,7 @@ class MessageInput extends HTMLElement {
         this._stopButton.removeAttribute('disabled');
         this._stopButton.style.display = 'block';
         this._messageInputField.setAttribute('disabled', 'disabled');
+        this._updateModelControls();
         let messageContent = this._messageInputField.value;
         this._messageInputField.value = '';
         this._autoResize();
@@ -963,6 +1116,7 @@ class MessageInput extends HTMLElement {
         // the user's words (plus the document names) appear in the chat.
         const question = browser.i18n.getMessage('chat_email_question_label') + "\n" + messageContent;
         const parts = [];
+        const emailContext = this._pendingContext;
         if (this._pendingContext) {
             parts.push(this._pendingContext);
             this._pendingContext = null;
@@ -974,59 +1128,71 @@ class MessageInput extends HTMLElement {
             this._clearAttachments();
         }
         const workerContent = parts.length > 0 ? parts.join("\n\n") + "\n\n" + question : messageContent;
+        this.dispatchEvent(new CustomEvent('chat-message', { detail: {
+            text: documents.length ? messageContent + "\n\n📄 " + documents.map(d => d.name).join(', ') : messageContent,
+            content: workerContent,
+            context: emailContext,
+        } }));
         this.worker.postMessage({ type: 'chatMessage', message: workerContent });
     }
 
     async _addAttachments(files) {
-        for (const file of files) {
-            const item = { name: file.name, status: 'reading', text: '', truncated: false };
-            this._attachments.push(item);
-            this._renderAttachments();
+        return this._queueAttachments([...files].map(file => ({ name: file.name, load: async () => file })));
+    }
+
+    async _queueAttachments(entries) {
+        const available = Math.max(0, MAX_EMAIL_ATTACHMENTS - this._attachments.length);
+        if (entries.length > available) this.showErrorStatus('Attach up to 5 documents per message.');
+        // Reserve every slot before any await, including files still being fetched.
+        const items = entries.slice(0, available).map(entry => ({
+            ...entry, status: 'reading', text: '', truncated: false, controller: new AbortController(),
+        }));
+        this._attachments.push(...items);
+        this._renderAttachments();
+        for (const item of items) {
+            const signal = item.controller.signal;
+            if (signal.aborted) continue;
             try {
-                const result = await extractDocumentText(file);
-                if (!result.text) {
-                    throw new Error('empty');
-                }
+                const file = await item.load();
+                if (signal.aborted) continue;
+                const result = await extractDocumentText(file, { signal });
+                if (signal.aborted) continue;
+                if (!result.text) throw new Error('empty');
                 Object.assign(item, result, { status: 'ready' });
-            } catch (e) {
+            } catch (error) {
+                if (signal.aborted) continue;
                 item.status = 'error';
-                item.error = e instanceof UnsupportedDocumentError
-                    ? browser.i18n.getMessage('attach_unsupported', [file.name])
-                    : browser.i18n.getMessage('attach_failed', [file.name]);
-                console.error('[ThunderAI] Could not read attachment', file.name, e);
+                item.error = error instanceof UnsupportedDocumentError
+                    ? browser.i18n.getMessage('attach_unsupported', [item.name])
+                    : browser.i18n.getMessage('attach_failed', [item.name]);
+            } finally {
+                delete item.load;
             }
             this._renderAttachments();
         }
     }
 
-    /**
-     * Chat about an email: attach the emails' readable attachments to the
-     * first message, as removable chips. A file sent again later in the
-     * thread (same name and size) is added once.
-     */
+    /** Keep the newest copy when a thread repeats a filename and size. */
     async addEmailAttachments(list) {
         if (!Array.isArray(list)) return;
         const seen = new Set();
         const wanted = [];
-        for (const a of list) {
-            const key = a.name + '|' + a.size;
-            if (seen.has(key) || !isSupportedDocument(a.name || '', (a.contentType || '').toLowerCase()) ||
-                a.size > MAX_EMAIL_ATTACHMENT_BYTES) continue;
+        for (const attachment of [...list].reverse()) {
+            const key = attachment.name + '|' + attachment.size;
+            if (seen.has(key) || !isSupportedDocument(attachment.name || '', (attachment.contentType || '').toLowerCase()) ||
+                attachment.size > MAX_EMAIL_ATTACHMENT_BYTES) continue;
             seen.add(key);
-            wanted.push(a);
+            wanted.push({ name: attachment.name, load: async () => {
+                const file = await browser.messages.getAttachmentFile(attachment.messageId, attachment.partName);
+                return new File([file], attachment.name, { type: file.type || attachment.contentType });
+            } });
+            if (wanted.length === MAX_EMAIL_ATTACHMENTS) break;
         }
-        // Newest first: the latest version of a document is the one that matters.
-        for (const a of wanted.reverse().slice(0, MAX_EMAIL_ATTACHMENTS)) {
-            try {
-                const file = await browser.messages.getAttachmentFile(a.messageId, a.partName);
-                await this._addAttachments([new File([file], a.name, { type: file.type || a.contentType })]);
-            } catch (e) {
-                console.error('[ThunderAI] Could not open email attachment', a.name, e);
-            }
-        }
+        return this._queueAttachments(wanted);
     }
 
     _clearAttachments() {
+        for (const item of this._attachments) item.controller?.abort();
         this._attachments = [];
         this._renderAttachments();
     }
@@ -1041,7 +1207,7 @@ class MessageInput extends HTMLElement {
             const label = document.createElement('span');
             label.className = 'chip-name';
             label.textContent = item.status === 'reading'
-                ? `📄 ${item.name} — ${browser.i18n.getMessage('attach_reading')}`
+                ? `📄 ${item.name} - ${browser.i18n.getMessage('attach_reading')}`
                 : item.status === 'error' ? `⚠ ${item.error}` : `📄 ${item.name}`;
             chip.title = item.status === 'error' ? item.error : item.name;
             const remove = document.createElement('button');
@@ -1050,6 +1216,7 @@ class MessageInput extends HTMLElement {
             remove.title = browser.i18n.getMessage('attach_remove', [item.name]);
             remove.setAttribute('aria-label', remove.title);
             remove.addEventListener('click', () => {
+                item.controller?.abort();
                 this._attachments = this._attachments.filter(a => a !== item);
                 this._renderAttachments();
             });

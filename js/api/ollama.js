@@ -17,6 +17,9 @@
  */
 
 
+import { redactApiError } from './api-utils.js';
+import { secureFetch } from '../endpoint-policy.js';
+
 export class Ollama {
     host = '';
     model = '';
@@ -44,10 +47,11 @@ export class Ollama {
       this.format_json = format_json;
     }
 
-    fetchModels = async () => {
+    fetchModels = async (signal) => {
       try{
-        const response = await fetch(this.host + "/api/tags", {
+        const response = await secureFetch(this.host + "/api/tags", {
             method: "GET",
+          signal,
             headers: {
                 "Content-Type": "application/json"
             },
@@ -56,10 +60,10 @@ export class Ollama {
         if (!response.ok) {
             const errorDetail = await response.text();
             let err_msg = "[ThunderAI] Ollama API request failed: " + response.status + " " + response.statusText + ", Detail: " + errorDetail;
-            console.error(err_msg);
+            console.error("[ThunderAI] Provider rejected the models request");
             let output = {};
             output.ok = false;
-            output.error = errorDetail;
+            output.error = redactApiError(errorDetail, this.apiKey);
             return output;
         }
 
@@ -72,22 +76,24 @@ export class Ollama {
 
         return output;
       }catch (error) {
-        console.error("[ThunderAI] Ollama API request failed: " + error);
+        if (error?.name === 'AbortError') throw error;
+        console.error("[ThunderAI] Ollama API request failed: ");
         let output = {};
         output.is_exception = true;
         output.ok = false;
-        output.error = "Ollama API request failed: " + error;
+        output.error = "Ollama API request failed: " + redactApiError(error, this.apiKey);
         return output;
       }
     }
 
     
-    fetchResponse = async (messages) => {
+    fetchResponse = async (messages, { signal } = {}) => {
       try {
         const tempFloat = parseFloat(this.temperature);
         //console.log(">>>>>>>>>>  messages: " +JSON.stringify(messages));
-        const response = await fetch(this.host + "/api/chat", {
+        const response = await secureFetch(this.host + "/api/chat", {
             method: "POST",
+            signal,
             headers: { 
                 "Content-Type": "application/json", 
             },
@@ -97,17 +103,22 @@ export class Ollama {
                 stream: this.stream,
                 think: this.think,
                 ...(this.format_json ? { format: "json" } : {}),
-                ...(this.num_ctx > 0 ? { options: { num_ctx: parseInt(this.num_ctx) } } : {}),
-                ...(this.temperature != '' && !Number.isNaN(tempFloat) ? { options: { temperature: tempFloat } } : {}),
+                ...((this.num_ctx > 0 || (this.temperature != '' && !Number.isNaN(tempFloat))) ? {
+                    options: {
+                        ...(this.num_ctx > 0 ? { num_ctx: parseInt(this.num_ctx) } : {}),
+                        ...(this.temperature != '' && !Number.isNaN(tempFloat) ? { temperature: tempFloat } : {}),
+                    }
+                } : {}),
             }),
         });
         return response;
       }catch (error) {
-          console.error("[ThunderAI] Ollama API request failed: " + error);
+        if (error?.name === 'AbortError') throw error;
+          console.error("[ThunderAI] Ollama API request failed: ");
           let output = {};
           output.is_exception = true;
           output.ok = false;
-          output.error = "Ollama API request failed: " + error;
+          output.error = "Ollama API request failed: " + redactApiError(error, this.apiKey);
           return output;
       }
     }

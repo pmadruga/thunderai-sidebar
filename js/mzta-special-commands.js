@@ -1,3 +1,5 @@
+import { acknowledgedHttpOrigins } from './endpoint-policy.js';
+import { getSecureSettings, setSecureSettings } from './secure-settings.js';
 /*
  *  ThunderAI [https://micz.it/thunderbird-addon-thunderai/]
  *  Copyright (C) 2024 - 2026  Mic (m@micz.it)
@@ -124,10 +126,10 @@
             prefsToGet[prefKey] = prefs_default[prefKey];
         }
 
-        const prefs_api = await browser.storage.sync.get(prefsToGet);
+        const prefs_api = await getSecureSettings(prefsToGet);
 
         // Load the configurable timeout used to abort a hung worker in sendPrompt().
-        const prefs_timeout = await browser.storage.sync.get({ special_command_timeout: prefs_default.special_command_timeout });
+        const prefs_timeout = await getSecureSettings({ special_command_timeout: prefs_default.special_command_timeout });
         if (Number.isFinite(prefs_timeout.special_command_timeout) && prefs_timeout.special_command_timeout > 0) {
             this.timeout_ms = prefs_timeout.special_command_timeout;
         }
@@ -143,6 +145,7 @@
 
         let workerInitMessage = {
             type: 'init',
+            allowed_http_origins: await acknowledgedHttpOrigins(),
             do_debug: this.do_debug,
             i18nStrings: ''
         };
@@ -192,8 +195,7 @@
                     case 'newThinkingToken':
                         // A special command's response is parsed, not displayed, so the
                         // model's reasoning must never reach full_message. Kept apart here
-                        // for the providers that stream it in a dedicated field: it is only
-                        // written to the debug log, never handed to the caller.
+                        // for the providers that stream it in a dedicated field: it is not handed to the caller or written to logs.
                         this.thinking_message += payload.token;
                         break;
                     case 'tokensDone': {
@@ -205,13 +207,13 @@
                         // The whole response is passed here, so the leading whitespace a
                         // removed block leaves behind is safe to trim (third argument).
                         const cleaned = stripThinkTags(this.full_message, true, true).text;
-                        this.logger.log("tokensDone: " + cleaned);
+                        this.logger.log("Model response completed");
                         resolve(cleaned); // Resolve the promise with the full message
                         break;
                     }
                     case 'error':
                         clearTimer();
-                        console.error('[ThunderAI] Error from API worker:', payload);
+                        console.error('[ThunderAI] API worker reported an error');
                         reject(new Error(`[ThunderAI] Error from API worker: ${payload}`)); // Use a single error object
                         break;
                     default:
@@ -221,12 +223,7 @@
 
             this.worker.onerror = (error) => {
                 clearTimer();
-                console.error('[ThunderAI] Worker Error Details:');
-                console.error('Message:', error.message);
-                console.error('Filename:', error.filename);
-                console.error('Line Number:', error.lineno);
-                console.error('Column Number:', error.colno);
-                console.error('Event:', error);
+                console.error('[ThunderAI] Special-command worker failed');
                 reject(error);
             };
 
@@ -235,7 +232,7 @@
             this.worker.postMessage({ type: 'chatMessage', message: this.prompt });
         } catch (error) {
             clearTimer();
-            console.error('[ThunderAI] Failed to send message to worker:', error);
+            console.error('[ThunderAI] Failed to send message to worker');
             reject(error);
         }
         });

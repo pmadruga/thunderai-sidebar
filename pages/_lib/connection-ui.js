@@ -16,6 +16,8 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+import { getSecureSettings, setSecureSettings } from '../../js/secure-settings.js';
+import { confirmEndpointAccess } from '../../js/endpoint-policy.js';
 import './tom-select.base.js';
 import {
   prefs_default,
@@ -829,7 +831,7 @@ export async function injectConnectionUI({
   // Null when the ChatGPT Web rows were not injected (see chatgpt_web_rows).
   const btnChatGPTWeb_Tab = document.getElementById('btnChatGPTWeb_Tab');
   btnChatGPTWeb_Tab?.addEventListener('click', async () => {
-    let prefs_mod = await browser.storage.sync.get({
+    let prefs_mod = await getSecureSettings({
       chatgpt_web_model: prefs_default.chatgpt_web_model,
       chatgpt_web_project: prefs_default.chatgpt_web_project,
       chatgpt_web_custom_gpt: prefs_default.chatgpt_web_custom_gpt
@@ -878,7 +880,7 @@ export async function injectConnectionUI({
     }
   });
 
-  let prefs = await browser.storage.sync.get({
+  let prefs = await getSecureSettings({
     chatgpt_web_model: '',
     chatgpt_model: '',
     ollama_model: '',
@@ -1210,7 +1212,21 @@ export async function injectConnectionUI({
       }
     });
 
-   // Scoped to the rows this call injected (see queryInjected).
+   // A host can be stored by different feature pages. Network requests enforce
+  // the policy independently; this is the explicit per-origin acknowledgement UI.
+  for (const provider of ['ollama', 'openai_comp']) {
+    const input = document.getElementById(getPrefixedId(provider + '_host'));
+    input?.addEventListener('change', async () => {
+      if (!input.value.trim()) return;
+      try {
+        const approved = await confirmEndpointAccess(input.value.trim());
+        input.setCustomValidity(approved ? '' : 'HTTPS is required until this HTTP origin is acknowledged.');
+      } catch (error) { input.setCustomValidity(error.message); }
+      if (!input.checkValidity()) input.reportValidity();
+    });
+  }
+
+  // Scoped to the rows this call injected (see queryInjected).
    queryInjected('.check-number').forEach(input => {
     input.addEventListener('input', warn_InvalidNumber);
    });
@@ -1376,7 +1392,7 @@ export async function initializeSpecificIntegrationUI({
   // with the first usable connection the user picks — otherwise the feature would
   // read as enabled while still having nothing to run against, and would silently
   // disappear from the menus on the next reload.
-  let globalPrefs = await browser.storage.sync.get({ connection_type: prefs_default.connection_type });
+  let globalPrefs = await getSecureSettings({ connection_type: prefs_default.connection_type });
   const mandatory_integration = (globalPrefs.connection_type === 'chatgpt_web')
       || hasNoConnectionSelected(globalPrefs.connection_type);
   if (mandatory_integration) {
@@ -1414,9 +1430,9 @@ export async function initializeSpecificIntegrationUI({
   // what the user sees. Only for a usable value: an empty one means "nothing chosen yet".
   const _persistSelectedConnection = async () => {
       if (hasNoConnectionSelected(conntype_el.value)) return;
-      const stored = await browser.storage.sync.get({ [conntype_select_id]: '' });
+      const stored = await getSecureSettings({ [conntype_select_id]: '' });
       if (stored[conntype_select_id] === conntype_el.value) return;
-      await browser.storage.sync.set({ [conntype_select_id]: conntype_el.value });
+      await setSecureSettings({ [conntype_select_id]: conntype_el.value });
       taLog.log(`Stored the connection shown by the ${prefix} select: ${conntype_el.value}`);
   };
 
@@ -1425,9 +1441,9 @@ export async function initializeSpecificIntegrationUI({
   const _persistMandatoryIntegration = async () => {
       if (!mandatory_integration) return;
       if (hasNoConnectionSelected(conntype_el.value)) return;
-      const stored = await browser.storage.sync.get({ [use_specific_integration_id]: false });
+      const stored = await getSecureSettings({ [use_specific_integration_id]: false });
       if (stored[use_specific_integration_id]) return;
-      await browser.storage.sync.set({ [use_specific_integration_id]: true });
+      await setSecureSettings({ [use_specific_integration_id]: true });
       taLog.log(`Specific integration is mandatory for ${prefix}: enabled it alongside ${conntype_el.value}`);
   };
 
@@ -1442,7 +1458,7 @@ export async function initializeSpecificIntegrationUI({
           // read by the prompt = null call sites — the menu gating in mzta-background.js and
           // the feature row in mzta-options.js.
           await clearPromptAPI(promptId);
-          await browser.storage.sync.set({ [conntype_select_id]: '' });
+          await setSecureSettings({ [conntype_select_id]: '' });
       } else {
           await _updatePrompt();
           // Persist the value the select is already showing. restoreOptions() pre-fills it

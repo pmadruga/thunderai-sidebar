@@ -1,3 +1,4 @@
+import { getSecureSettings, setSecureSettings, promptStorage } from '../../js/secure-settings.js';
 /*
  *  ThunderAI [https://micz.it/thunderbird-addon-thunderai/]
  *  Copyright (C) 2024 - 2026  Mic (m@micz.it)
@@ -45,7 +46,7 @@ let activePlaceholders = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
 
-    prefs = await browser.storage.sync.get({ do_debug: prefs_default.do_debug });
+    prefs = await getSecureSettings({ do_debug: prefs_default.do_debug });
     taLog = new taLogger("mzta-custom-dataplaceholders", prefs.do_debug);
     
     setStorageSpace();

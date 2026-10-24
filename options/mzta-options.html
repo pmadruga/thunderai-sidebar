@@ -306,16 +306,6 @@
               </div>
             </div>
 
-            <!-- Max prompt length -->
-            <div class="mzta_field" id="max_prompt_length_tr">
-              <span class="opt_title">__MSG_prefs_OptionText_max_prompt_length__</span>
-              <div style="display:flex;gap:6px;align-items:center;">
-                <input type="number" id="max_prompt_length" name="max_prompt_length" class="option-input" />
-                <button type="button" id="reset_max_prompt_length" class="btn_small">__MSG_reset_default__</button>
-              </div>
-              <span class="mzta_help">__MSG_prefs_OptionText_max_prompt_length_Info__</span>
-            </div>
-
             <!-- Special command timeout -->
             <div class="mzta_field">
               <span class="opt_title">__MSG_prefs_OptionText_special_command_timeout__</span>
@@ -377,6 +367,26 @@
                 <span class="track"></span>
               </label>
             </div>
+
+            <div class="mzta_adv_row">
+              <div class="mzta_adv_info">
+                <label class="mzta_adv_name" for="chat_history_retention_days">__MSG_chat_history_retention_label__</label>
+                <div class="mzta_adv_desc">__MSG_chat_history_retention_help__</div>
+              </div>
+              <input type="number" id="chat_history_retention_days" min="0" max="36500" step="1" value="90" aria-describedby="chat_history_settings_status" />
+            </div>
+            <div class="mzta_adv_row">
+              <div class="mzta_adv_info">
+                <label class="mzta_adv_name" for="chat_history_max_mb">__MSG_chat_history_budget_label__</label>
+                <div class="mzta_adv_desc">__MSG_chat_history_budget_help__</div>
+              </div>
+              <input type="number" id="chat_history_max_mb" min="1" max="500" step="1" value="50" />
+            </div>
+            <div class="mzta_storage_row">
+              <span>__MSG_chat_history_storage_help__</span>
+              <button id="btnClearAllChats" type="button" class="btn_small">__MSG_chat_history_clear_all__</button>
+            </div>
+            <p id="chat_history_settings_status" class="mzta_help" role="status" aria-live="polite"></p>
 
             <!-- Storage -->
             <div class="mzta_storage_row">

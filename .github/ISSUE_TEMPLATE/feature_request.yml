@@ -1,40 +1,16 @@
-name: Feature Request
-description: Suggest a new idea for ThunderAI
+name: Fork feature request
+description: Suggest an improvement to ThunderAI Side Panel.
 body:
-  - type: markdown
-    attributes:
-      value: |
-        This issue form is for suggesting new ideas only!
-
-        If you need to report a bug, please use the [bug][bg] form.
-
-        [bg]: https://github.com/micz/ThunderAI/issues/new?template=bug_report.yml
   - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the workflow without including private email or account details.
     validations:
       required: true
-    id: idea
-    attributes:
-      label: Your idea
-      description: >-
-        Describe the idea you'd like to see implemented in ThunderAI.
-
-        Provide a clear and concise description.
-  - type: markdown
-    attributes:
-      value: |
-        # Details
   - type: textarea
-    id: value
+    id: proposal
     attributes:
-      label: Value
-      description: >-
-        What value does this idea bring to ThunderAI? How does it improve the
-        user experience or functionality?
-  - type: textarea
-    id: additional
-    attributes:
-      label: Additional information
-      description: >
-        If you have any additional information, use the field below.
-        Please note, you can attach screenshots or screen recordings here, by
-        dragging and dropping files in the field below.
+      label: Proposed behavior and alternatives
+    validations:
+      required: true

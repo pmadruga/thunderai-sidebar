@@ -1,0 +1,58 @@
+[
+  {
+    "file": "pages/_lib/list.js",
+    "version": "2.3.1",
+    "source": "https://raw.githubusercontent.com/javve/list.js/v2.3.1/dist/list.js",
+    "license": "MIT",
+    "license_file": "licenses/list.js-MIT.txt",
+    "sha256": "4a712e18bf810e22d3aa5b61d95555bc65d6dbfeff0999a7a586fcbd5168e82e"
+  },
+  {
+    "file": "pages/_lib/tom-select.base.js",
+    "version": "2.6.2",
+    "source": "https://cdn.jsdelivr.net/npm/tom-select@2.6.2/dist/js/tom-select.base.js",
+    "license": "Apache-2.0",
+    "license_file": "licenses/tom-select-Apache-2.0.txt",
+    "sha256": "840cb2fee40f4ae6d20c57181c00d4ea83e4e3accca2919fb83189346e50415e"
+  },
+  {
+    "file": "pages/_lib/tom-select.default.min.css",
+    "version": "2.6.2",
+    "source": "https://cdn.jsdelivr.net/npm/tom-select@2.6.2/dist/css/tom-select.default.min.css",
+    "license": "Apache-2.0",
+    "license_file": "licenses/tom-select-Apache-2.0.txt",
+    "sha256": "f1d39d120d83e42f08a4f0fbc33f99e92333079e05fecfecd3c22da37b8427c8"
+  },
+  {
+    "file": "js/lib/diff.js",
+    "version": "9.0.0",
+    "source": "https://cdn.jsdelivr.net/npm/diff@9.0.0/dist/diff.js",
+    "license": "BSD-3-Clause",
+    "license_file": "licenses/jsdiff-BSD-3-Clause.txt",
+    "sha256": "5773c7efb34715bb9a9b6a9ebf5b0ff00f85f9efa6d9fd69fc65e181364f7b2e"
+  },
+  {
+    "file": "api_webchat/markdown-it.min.js",
+    "version": "14.3.0",
+    "source": "https://cdn.jsdelivr.net/npm/markdown-it@14.3.0/dist/markdown-it.min.js",
+    "license": "MIT",
+    "license_file": "licenses/markdown-it-MIT.txt",
+    "sha256": "70fe17bd06c7fa819f03a1ed10957904318103624198845dc893b309bf495e28"
+  },
+  {
+    "file": "js/lib/pdfjs/pdf.min.mjs",
+    "version": "6.3.289",
+    "source": "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.min.mjs",
+    "license": "Apache-2.0",
+    "license_file": "js/lib/pdfjs/LICENSE",
+    "sha256": "f80490490320511e5df18c580b9edd6b5db8058dceebaf6f161992e0a964b9e2"
+  },
+  {
+    "file": "js/lib/pdfjs/pdf.worker.min.mjs",
+    "version": "6.3.289",
+    "source": "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.worker.min.mjs",
+    "license": "Apache-2.0",
+    "license_file": "js/lib/pdfjs/LICENSE",
+    "sha256": "8ab0e5e30031b4a06ecfddd5ae9562f0227f830ee7ec9ed1a968b134243d2386"
+  }
+]

@@ -1,3 +1,4 @@
+import { promptStorage, isSecretSetting } from './secure-settings.js';
 /*
  *  ThunderAI [https://micz.it/thunderbird-addon-thunderai/]
  *  Copyright (C) 2024 - 2026  Mic (m@micz.it)
@@ -454,6 +455,8 @@ export async function getPrompts(onlyReachable = false, includeSpecial = [], all
 export function preparePromptsForExport(prompts, include_api_settings = false){
     let output = JSON.parse(JSON.stringify(prompts));
     output.forEach(prompt => {
+        delete prompt._secure_credentials;
+        for (const key of Object.keys(prompt)) if (isSecretSetting(key)) delete prompt[key];
 
         if(!include_api_settings){
             delete prompt.api_type;
@@ -505,6 +508,8 @@ export function preparePromptsForExport(prompts, include_api_settings = false){
 }
 
 export async function preparePromptsForImport(prompts){
+    prompts = structuredClone(prompts);
+    for (const prompt of prompts) delete prompt._secure_credentials;
     // console.log(">>>>>>>>>>> preparePromptsForImport prompts: " + JSON.stringify(prompts));
     const output = await getPrompts();
     // console.log(">>>>>>>>>>> preparePromptsForImport output: " + JSON.stringify(output));
@@ -573,7 +578,7 @@ export function normalizePromptFlags(prompt, fallbacks = {}) {
 }
 
 async function getDefaultPrompts_withProps() {
-    let prefs = await browser.storage.local.get({_default_prompts_properties: null});
+    let prefs = await promptStorage.get({_default_prompts_properties: null});
     // console.log('>>>>>>>>>>>> getDefaultPrompts_withProps prefs: ' + JSON.stringify(prefs));
     //let defaultPrompts_prop = [...defaultPrompts];
     let defaultPrompts_prop = JSON.parse(JSON.stringify(defaultPrompts));
@@ -629,7 +634,7 @@ async function getDefaultPrompts_withProps() {
 
 
 async function getCustomPrompts() {
-    let prefs = await browser.storage.local.get({_custom_prompt: null});
+    let prefs = await promptStorage.get({_custom_prompt: null});
     if(prefs._custom_prompt === null){
         return [];
     } else {
@@ -682,16 +687,16 @@ export async function setDefaultPromptsProperties(prompts) {
         };
     });
     //console.log('>>>>>>>>>>>>>> default_prompts_properties: ' + JSON.stringify(default_prompts_properties));
-    await browser.storage.local.set({_default_prompts_properties: default_prompts_properties});
+    await promptStorage.set({_default_prompts_properties: default_prompts_properties});
 }
 
 export async function setCustomPrompts(prompts) {
     // console.log(">>>>>>>>>>>> setCustomPrompts prompts: " + JSON.stringify(prompts));
-    await browser.storage.local.set({_custom_prompt: prompts});
+    await promptStorage.set({_custom_prompt: prompts});
 }
 
 export async function getSpecialPrompts(){
-    let prefs = await browser.storage.local.get({_special_prompts: null});
+    let prefs = await promptStorage.get({_special_prompts: null});
     if(prefs._special_prompts === null){
         let def_specPrompts = structuredClone(specialPrompts);
         def_specPrompts.forEach((prompt) => {
@@ -733,7 +738,7 @@ export async function getSpecialPrompts(){
 
         // console.log(">>>>>>>>>>>>> getSpecialPrompts updatedPrompts: " + JSON.stringify(updatedPrompts));
         if (updatedPrompts.length !== prefs._special_prompts.length) {
-            await browser.storage.local.set({ _special_prompts: updatedPrompts });
+            await promptStorage.set({ _special_prompts: updatedPrompts });
         }
 
         return updatedPrompts;
@@ -742,7 +747,7 @@ export async function getSpecialPrompts(){
 
 export async function setSpecialPrompts(prompts) {
     // console.log(">>>>>>>>>>>> setSpecialPrompts prompts: " + JSON.stringify(prompts));
-    await browser.storage.local.set({_special_prompts: prompts});
+    await promptStorage.set({_special_prompts: prompts});
 }
 
 export function getHiddenSpecialPromptIds() {
@@ -818,17 +823,17 @@ export async function migrateEnabledToShowIn() {
     }
 
     // Default prompt properties: object keyed by prompt id.
-    const dpp = await browser.storage.local.get({ _default_prompts_properties: null });
+    const dpp = await promptStorage.get({ _default_prompts_properties: null });
     if (dpp._default_prompts_properties !== null) {
         const props = dpp._default_prompts_properties;
         Object.keys(props).forEach((id) => {
             normalizeEnabledToShowIn(props[id]);
         });
-        await browser.storage.local.set({ _default_prompts_properties: props });
+        await promptStorage.set({ _default_prompts_properties: props });
     }
 
     // Custom prompts: array of full prompt objects.
-    const cp = await browser.storage.local.get({ _custom_prompt: null });
+    const cp = await promptStorage.get({ _custom_prompt: null });
     if (cp._custom_prompt !== null) {
         cp._custom_prompt.forEach(normalizeEnabledToShowIn);
         await setCustomPrompts(cp._custom_prompt);
@@ -836,7 +841,7 @@ export async function migrateEnabledToShowIn() {
 
     // Special prompts: array of full prompt objects. Only strips enabled; the
     // special "feature active" mechanism is untouched.
-    const sp = await browser.storage.local.get({ _special_prompts: null });
+    const sp = await promptStorage.get({ _special_prompts: null });
     if (sp._special_prompts !== null) {
         sp._special_prompts.forEach(normalizeEnabledToShowIn);
         await setSpecialPrompts(sp._special_prompts);

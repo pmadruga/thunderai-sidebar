@@ -31,3 +31,8 @@ dist
 # ThunderAI (Side Panel) build output
 dist/
 backup/
+
+# Python validation and packaging caches
+__pycache__/
+*.py[cod]
+.pytest_cache/

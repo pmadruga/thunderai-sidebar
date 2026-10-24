@@ -92,9 +92,15 @@ export const BLOCK_ALLOWED = new Set([...INLINE_ALLOWED, ...BLOCK_TAGS, 'ul', 'o
 // correctly for free. Deliberately NOT through a hand-rolled escapeHtml(): on
 // HTML input that would escape the very tags we are trying to keep.
 function sanitizeAgainst(html, allowed) {
-    const doc = new DOMParser().parseFromString(String(html == null ? '' : html), 'text/html');
+    // Template contents are inert, including resource-loading elements. Parse
+    // inside a detached document's template so img/iframe/style URLs cannot
+    // fetch before the allowlist removes them. Never attach this source tree.
+    const doc = document.implementation.createHTMLDocument('');
+    const template = doc.createElement('template');
+    template.innerHTML = String(html == null ? '' : html);
+    const root = template.content;
     // Walk a static list: unwrapping mutates the tree under a live collection.
-    const els = Array.from(doc.body.querySelectorAll('*'));
+    const els = Array.from(root.querySelectorAll('*'));
     for (const el of els) {
         const tag = el.tagName.toLowerCase();
         if (!allowed.has(tag)) {
@@ -111,7 +117,7 @@ function sanitizeAgainst(html, allowed) {
             if (!keep) { el.removeAttribute(attr.name); }
         }
     }
-    return doc.body.innerHTML;
+    return template.innerHTML;
 }
 
 // The single, parameterized sanitizer. allowBlocks:true is the whole-answer gate

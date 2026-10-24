@@ -38,7 +38,18 @@ export function parseExtraBody(extra_body) {
         }
         return parsed;
     } catch (error) {
-        console.warn("[ThunderAI] The extra body data is not valid JSON, it will be ignored: " + error);
+        console.warn("[ThunderAI] The extra body data is not valid JSON, it will be ignored.");
         return {};
     }
+}
+
+// Error messages can contain a request URL (notably providers with query keys).
+// Redact known credentials before displaying or persisting an error string.
+export function redactApiError(error, secret = '') {
+    let message = String(error?.message || error || 'Request failed');
+    if (secret) {
+        message = message.split(String(secret)).join('[redacted]');
+        message = message.split(encodeURIComponent(String(secret))).join('[redacted]');
+    }
+    return message.replace(/([?&](?:key|api_key|access_token)=)[^&#\s"']*/gi, '$1[redacted]');
 }

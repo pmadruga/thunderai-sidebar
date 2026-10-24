@@ -16,6 +16,9 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+import { MAX_DOCUMENT_BYTES, MAX_DOCUMENT_XML_BYTES, MAX_PDF_PAGES, assertDocumentSize, checkAbort, readBoundedText } from './attachment-limits.js';
+export { MAX_DOCUMENT_BYTES };
+
 // Document attachments for the chat (ThunderAI Side Panel fork): turns a
 // user-chosen file into plain text that is sent along with the next message.
 // Supported: text-like files, PDF (bundled pdf.js) and Word .docx.
@@ -48,13 +51,18 @@ export function isSupportedDocument(name, type = '') {
  * @param {File} file
  * @returns {Promise<{name: string, text: string, truncated: boolean}>}
  */
-export async function extractDocumentText(file) {
+export async function extractDocumentText(file, { signal } = {}) {
+    assertDocumentSize(file);
+    checkAbort(signal);
     const ext = extensionOf(file.name);
     let text;
+    let extractionTruncated = false;
     if (ext === 'pdf' || file.type === 'application/pdf') {
-        text = await extractPdfText(file);
+        const result = await extractPdfText(file, signal);
+        text = result.text;
+        extractionTruncated = result.truncated;
     } else if (ext === 'docx') {
-        text = await extractDocxText(file);
+        text = await extractDocxText(file, signal);
     } else if (TEXT_EXTENSIONS.has(ext) || file.type.startsWith('text/') || file.type === 'application/json') {
         text = await file.text();
         if (ext === 'html' || ext === 'htm') {
@@ -63,8 +71,9 @@ export async function extractDocumentText(file) {
     } else {
         throw new UnsupportedDocumentError(file.name);
     }
+    checkAbort(signal);
     text = text.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-    const truncated = text.length > MAX_DOCUMENT_CHARS;
+    const truncated = extractionTruncated || text.length > MAX_DOCUMENT_CHARS;
     return { name: file.name, text: truncated ? text.slice(0, MAX_DOCUMENT_CHARS) : text, truncated };
 }
 
@@ -82,27 +91,38 @@ function loadPdfJs() {
     return pdfjsPromise;
 }
 
-async function extractPdfText(file) {
+async function extractPdfText(file, signal) {
     const pdfjs = await loadPdfJs();
+    checkAbort(signal);
     const loadingTask = pdfjs.getDocument({
         data: new Uint8Array(await file.arrayBuffer()),
-        isEvalSupported: false,   // extension pages forbid eval; not needed for text
+        isEvalSupported: false,
     });
-    const pdf = await loadingTask.promise;
-    const pages = [];
-    let total = 0;
-    for (let i = 1; i <= pdf.numPages && total <= MAX_DOCUMENT_CHARS; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        const pageText = content.items
-            .map(item => (item.str ?? '') + (item.hasEOL ? '\n' : ''))
-            .join('')
-            .trim();
-        pages.push(pageText);
-        total += pageText.length;
+    const abort = () => { Promise.resolve(loadingTask.destroy()).catch(() => {}); };
+    signal?.addEventListener('abort', abort, { once: true });
+    try {
+        checkAbort(signal);
+        const pdf = await loadingTask.promise;
+        const pages = [];
+        let total = 0;
+        let readPages = 0;
+        for (let i = 1; i <= Math.min(pdf.numPages, MAX_PDF_PAGES) && total <= MAX_DOCUMENT_CHARS; i++) {
+            checkAbort(signal);
+            const page = await pdf.getPage(i);
+            try {
+                const content = await page.getTextContent();
+                checkAbort(signal);
+                const pageText = content.items.map(item => (item.str ?? '') + (item.hasEOL ? '\n' : '')).join('').trim();
+                pages.push(pageText.slice(0, MAX_DOCUMENT_CHARS + 1 - total));
+                total += pageText.length;
+                readPages++;
+            } finally { page.cleanup(); }
+        }
+        return { text: pages.join('\n\n'), truncated: readPages < pdf.numPages || total > MAX_DOCUMENT_CHARS };
+    } finally {
+        signal?.removeEventListener('abort', abort);
+        await loadingTask.destroy();
     }
-    await loadingTask.destroy();   // pdf.js 6: cleanup goes through the loading task
-    return pages.join('\n\n');
 }
 
 // ── DOCX ────────────────────────────────────────────────────────────────────
@@ -110,7 +130,7 @@ async function extractPdfText(file) {
 // directory, inflate that one entry with DecompressionStream, and keep the
 // text of each paragraph.
 
-async function readZipEntry(buffer, wantedName) {
+async function readZipEntry(buffer, wantedName, signal) {
     const view = new DataView(buffer);
     // End of central directory record: signature 0x06054b50, within the last 64 KiB.
     let eocd = -1;
@@ -132,33 +152,40 @@ async function readZipEntry(buffer, wantedName) {
         }
         const method = view.getUint16(offset + 10, true);
         const compressedSize = view.getUint32(offset + 20, true);
+        const expandedSize = view.getUint32(offset + 24, true);
         const nameLength = view.getUint16(offset + 28, true);
         const extraLength = view.getUint16(offset + 30, true);
         const commentLength = view.getUint16(offset + 32, true);
         const localHeader = view.getUint32(offset + 42, true);
         const name = decoder.decode(new Uint8Array(buffer, offset + 46, nameLength));
         if (name === wantedName) {
+            if (expandedSize > MAX_DOCUMENT_XML_BYTES) throw new Error('Expanded document exceeds the extraction limit');
             const localNameLength = view.getUint16(localHeader + 26, true);
             const localExtraLength = view.getUint16(localHeader + 28, true);
             const start = localHeader + 30 + localNameLength + localExtraLength;
             const data = new Uint8Array(buffer, start, compressedSize);
             if (method === 0) {
+                if (data.byteLength > MAX_DOCUMENT_XML_BYTES) throw new Error('Expanded document exceeds the extraction limit');
+                checkAbort(signal);
                 return decoder.decode(data);
             }
             if (method !== 8) {
                 throw new Error('Unsupported compression in .docx');
             }
             const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-            return await new Response(stream).text();
+            return await readBoundedText(stream, MAX_DOCUMENT_XML_BYTES, signal);
         }
         offset += 46 + nameLength + extraLength + commentLength;
     }
     throw new Error('No document text found in .docx');
 }
 
-async function extractDocxText(file) {
-    const xml = await readZipEntry(await file.arrayBuffer(), 'word/document.xml');
+async function extractDocxText(file, signal) {
+    const xml = await readZipEntry(await file.arrayBuffer(), 'word/document.xml', signal);
+    checkAbort(signal);
+    if (/<!DOCTYPE|<!ENTITY/i.test(xml)) throw new Error('Document XML declarations are not supported');
     const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    if (doc.querySelector('parsererror')) throw new Error('Invalid document XML');
     const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
     const paragraphs = [];
     for (const p of doc.getElementsByTagNameNS(W, 'p')) {

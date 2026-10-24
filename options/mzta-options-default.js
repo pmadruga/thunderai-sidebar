@@ -131,7 +131,7 @@ export const prefs_default = {
     // Default comparison unit of the proofreading change picker: 'words' or
     // 'sentences'. A prompt can override it; '' on a prompt means "inherit this".
     diff_granularity: 'words',
-    max_prompt_length: 30000,   // max string length for prompt
+    max_prompt_length: 30000,   // fixed character guard for ChatGPT Web only; APIs use model context
     add_tags: false,
     add_tags_maxnum: 3,
     add_tags_hide_exclusions: false,

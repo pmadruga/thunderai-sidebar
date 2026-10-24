@@ -1,13 +1,13 @@
 {
     "manifest_version": 2,
-    "name": "ThunderAI (Side Panel)",
+    "name": "ThunderAI Side Panel",
     "description": "__MSG_extensionDescription__",
-    "version": "5.0.1.7",
-    "author": "Mic (m@micz.it)",
-    "homepage_url": "https://micz.it/thunderbird-addon-thunderai/",
+    "version": "5.1.0",
+    "author": "Pedro Madruga; based on ThunderAI by Mic",
+    "homepage_url": "https://github.com/pmadruga/thunderai-sidebar",
     "browser_specific_settings": {
         "gecko": {
-            "id": "thunderai@micz.it",
+            "id": "thunderai-sidebar@pedromadruga.com",
             "strict_min_version": "140.0"
         }
     },
@@ -19,7 +19,7 @@
         "default_title": "__MSG_menu_title__",
         "default_icon": "images/icon-32px.png",
         "default_popup": "popup/mzta-popup.html"
-      },
+    },
     "permissions": [
         "compose",
         "messagesRead",
@@ -49,8 +49,14 @@
         "chatPanel": {
             "schema": "experiments/chatPanel/schema.json",
             "parent": {
-                "scopes": ["addon_parent"],
-                "paths": [["chatPanel"]],
+                "scopes": [
+                    "addon_parent"
+                ],
+                "paths": [
+                    [
+                        "chatPanel"
+                    ]
+                ],
                 "script": "experiments/chatPanel/parent.js"
             }
         }
@@ -64,21 +70,25 @@
         "16": "images/icon-16px.png"
     },
     "default_locale": "en",
-	"options_ui": {
-		"page": "options/mzta-options.html"
-	},
+    "options_ui": {
+        "page": "options/mzta-options.html"
+    },
     "commands": {
         "_thunderai__do_action": {
-        "suggested_key": {
-            "default": "Ctrl+Alt+A"
-        },
-        "description": "Opens the ThunderAI prompts menu"
+            "suggested_key": {
+                "default": "Ctrl+Alt+A"
+            },
+            "description": "Opens the ThunderAI prompts menu"
         }
     },
     "content_scripts": [
         {
-            "matches": ["https://*.chatgpt.com/*"],
-            "js": ["js/lib/diff.js"],
+            "matches": [
+                "https://*.chatgpt.com/*"
+            ],
+            "js": [
+                "js/lib/diff.js"
+            ],
             "all_frames": true,
             "run_at": "document_start"
         }

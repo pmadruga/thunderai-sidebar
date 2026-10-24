@@ -131,6 +131,25 @@ projects, tags, current task) run directly and leave a "🔎" note. Writes
 (create, update, start, stop tracking) show a confirmation card first; Cancel
 returns `{cancelled: true}` to the model. There is no delete tool.
 
+## Chat model selector
+
+The input bar in API chats (both panel and popup) includes a Model dropdown
+and a refresh button. `api_webchat/models.js` fetches the current provider's
+models using its existing API client and the effective settings, including
+per-prompt overrides. Gemini models without `generateContent` are excluded.
+Discovery has a 10-second UI timeout; errors or empty lists leave the
+configured model usable and show a retry message. The current model remains
+an option even when the server doesn't list it.
+
+Changing the model reconfigures the existing worker, preserving conversation
+history, pending email context, attachments and tools. OpenAI's initialization
+clears `previous_response_id`, so the next request sends the full local history
+to the chosen model. The selection applies to the current chat; global and
+per-prompt defaults stay in Settings. The dropdown and refresh button are
+disabled from send until completion/error, including tool confirmations.
+The header and send tooltip reflect the chosen model, and the context meter
+is cleared until usage for the new model arrives.
+
 ## Context meter
 
 Under the chat input, a small "used / total" token count (e.g. `12.4k / 131k`,
@@ -153,3 +172,39 @@ keeps the ones `isSupportedDocument()` can read (PDF, .docx, text), at most
 It opens them with `messages.getAttachmentFile()` and adds them as normal
 document chips, so they ride along with the first message and the user can
 remove any before sending.
+
+## Private saved email chats
+
+Email chats save automatically and restore when the same chain is reopened,
+including after a restart. The background computes a SHA-256 key from the
+thread's root RFC Message-ID (first References entry, otherwise Message-ID),
+using the native message headers without loading bodies. Selections spanning
+several roots get a separate key. Subjects never identify saved chats. Startup
+messages carry the page's call ID so another open chat cannot consume them.
+
+`api_webchat/chatHistory.js` saves the visible user/assistant/error turns and
+native worker history, including completed tool results. All five API workers
+accept `restoreHistory`; OpenAI resets its server response ID so restored
+history is sent explicitly. A provider change rebuilds ordinary messages from
+the saved turns. Restoring never replays tool actions. Partial responses are
+checkpointed every 500 ms and marked interrupted on restore. Sending and
+completed responses save immediately; pagehide also requests a final save.
+A crash can lose the final checkpoint. Newly arrived email context is included
+with the next question; unchanged email context and attachments are not resent.
+
+`js/mzta-chathistory.js` queues storage operations in the background. Records
+under `email_chat_v1_<hash>` in `storage.local` contain only a versioned
+ciphertext envelope. A per-profile random key identifier is local too. The
+secret lives in Thunderbird's native OS key store, accessed through the
+chatPanel experiment, with UTF-8 byte encryption/decryption for long text.
+No transcript, subject, model history, or API credential is stored in cleartext
+by this feature, and no history or key identifier goes to `storage.sync`.
+Encryption errors never fall back to plaintext. Failed reads preserve the old
+record and disable saving for that page rather than overwriting it.
+
+This is encryption at rest, not a separate login barrier inside Thunderbird.
+An unlocked user session can read its chats. Sending a question still sends
+context/history to the selected API provider. The Clear saved chat button
+confirms deletion of this chain's stored record without touching emails; it is
+disabled during generation. Ordinary prompt popups without an email-chat key
+are not saved.

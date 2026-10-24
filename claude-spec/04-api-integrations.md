@@ -176,7 +176,7 @@ Reasoning reaches the UI over two transport paths, which can coexist for the sam
 provider and are merged into one block:
 
 **1. Dedicated stream field → `newThinkingToken`.** The worker accumulates the
-content in a `thinkingAccumulator` (also sent on `tokensDone`) and posts each token
+content in the active session's `thinking` accumulator (also sent on `tokensDone`) and posts each token
 to the controller. `StreamingMessage` accumulates them independently of content
 tokens, so thinking that arrives before the first content token is not lost.
 
@@ -186,7 +186,7 @@ tokens, so thinking that arrives before the first content token is not lost.
 | Ollama | `message.thinking` |
 | OpenAI Compatible | first present of `delta.reasoning_content` (DeepSeek, vLLM, SGLang), `delta.reasoning` (OpenRouter — string *or* object with `.text`), `delta.thinking` (some llama.cpp / LM Studio builds) |
 | Google Gemini | any `parts[]` entry with `thought === true`. **All** parts are iterated, not just `parts[0]`, because a thought part may come first and would otherwise be mixed into the answer. These parts only exist if the request sent `includeThoughts` — see above |
-| OpenAI Responses | `response.reasoning_summary_text.delta` and `response.reasoning_text.delta`; as a fallback, the concatenated `item.summary[].text` of a `response.output_item.done` whose `item.type === 'reasoning'`, for models that deliver the summary in one piece instead of streaming deltas. The fallback only fires while `thinkingAccumulator` is still empty, so a summary already received as deltas is never emitted twice. `item.encrypted_content` is always ignored — it is not readable |
+| OpenAI Responses | `response.reasoning_summary_text.delta` and `response.reasoning_text.delta`; as a fallback, the concatenated `item.summary[].text` of a `response.output_item.done` whose `item.type === 'reasoning'`, for models that deliver the summary in one piece instead of streaming deltas. The fallback only fires while the session thinking accumulator is still empty, so a summary already received as deltas is never emitted twice. `item.encrypted_content` is always ignored — it is not readable |
 
 **2. Inline `<think>…</think>` tags in the content stream.** Used by models that
 have no dedicated field (Ollama without `ollama_think`, several OpenAI-compatible
@@ -338,22 +338,58 @@ The provider classes in `js/api/` return **two different shapes** on failure, an
 - **Network-level exception** (server unreachable, DNS failure, CORS rejection): the `catch` block in `fetchResponse()` does **not** return a `Response`. It returns a plain object `{ok: false, is_exception: true, error}` with **no `status` and no `statusText`**, and `error` already includes the provider name (e.g. `"Ollama API request failed: TypeError: NetworkError…"`).
 - **HTTP error** (404, 401, 500…): a real `Response` is returned, so `status`, `statusText` and the JSON body are all available.
 
-Reading `response.status` / `response.statusText` in the exception branch yields a literal `"undefined undefined"` in the user-visible error, and re-prefixing the i18n provider string there duplicates the provider name. All five workers therefore build a single `error_text` variable:
+The shared `ChatSession` branches on `is_exception`, preserves the existing
+provider prefix for network errors, and reads HTTP error details only from real
+responses. `redactApiError()` removes configured credentials and credential query
+parameters before errors reach the UI or saved history. Parse errors never echo
+raw stream content. An error emits one terminal `error` event with the partial
+native history; successful and cancelled requests emit one `tokensDone` event.
 
-```js
-if(response.is_exception === true){
-    error_message = response.error;
-    error_text = error_message;              // already prefixed; no status/statusText exist
-}else{
-    // …extract error_message / errorDetail from the JSON body…
-    error_text = i18nStrings["<provider>_api_request_failed"] + ": " + response.status + " " + response.statusText
-        + ", Detail: " + error_message + (errorDetail ? " " + errorDetail : "");
-}
-postMessage({ type: 'error', payload: error_text });
-throw new Error("[ThunderAI] <Provider> API request failed: " + error_text);
-```
+### Shared chat streaming lifecycle
 
-The `postMessage` payload and the `throw` reuse the same `error_text` so the UI panel and the console message cannot drift apart.
+All five `model-worker-*.js` entry points delegate transport and request state to
+`js/workers/chat-session.js`. They retain provider configuration, native
+`conversationHistory`, `restoreHistory`, and model-switch initialization. The
+shared engine supports OpenAI-compatible tool calls and provider-specific
+reasoning fields without duplicating network loops.
+
+- `AbortController` covers fetch and reads. Stop aborts promptly even while
+  waiting for headers or a stalled stream. An idle deadline of 120 seconds
+  prevents an unresponsive backend from leaving the composer disabled forever.
+- Every request gets exactly one terminal event. Errors retain partial assistant
+  content and clear OpenAI's server response ID. Stopped responses carry
+  `tokensDone.payload.interrupted = true` and reset that ID too.
+- Readers are cancelled and released after completion, error, or cancellation.
+  Terminal SSE markers end a response without waiting for the server to close
+  its connection. The OpenAI-compatible `/props` probe has a five-second limit.
+- `stream-transport.js` decodes UTF-8 incrementally, supports SSE comments,
+  metadata, multiline data and CR/LF boundaries, and parses Ollama newline JSON.
+  Individual events are capped at 2 MiB of text. Invalid events fail explicitly.
+- Tool-call messages carry `payload.requestId`. The controller must echo it in
+  `toolResults`; late results after Stop are discarded. Cancelling while waiting
+  for confirmation records cancelled results for outstanding tool IDs so saved
+  native history remains valid. A message is limited to eight model/tool rounds.
+- Clients accept optional `{ signal }` request options and use `secureFetch`,
+  which validates endpoint policy and rejects redirects. Worker initialization
+  receives `allowed_http_origins` from local acknowledged-origin settings.
+- Ollama's `num_ctx` and `temperature` are merged into the same `options` object,
+  so setting temperature no longer discards the configured context size.
+
+`api_webchat/streamingMessage.js` uses a geometric render budget after the first
+2 KiB. Intermediate token spans remain live while cumulative Markdown reparsing
+stays bounded in proportion to final answer size. Final flush is unconditional,
+including a response interrupted inside an inline thinking block.
+
+Document extraction applies the same 25 MiB input cap to automatic and manual
+attachments. DOCX XML is limited to 8 MiB both by declared entry size and actual
+inflated bytes, and rejects XML DTD/entity declarations. PDF extraction is capped
+at 200 pages and releases page/loading-task resources in `finally`. The helper
+accepts `AbortSignal`; cancellation stops decompression or destroys the PDF task.
+The existing 120,000-character output limit remains separate from these resource
+limits. The UI additionally limits count and waits for in-progress extraction.
+
+Regression tests run without real providers or mail:
+`node --test tests/stream-transport.test.mjs tests/api-transport.test.mjs tests/attachment-limits.test.mjs tests/streaming-render-budget.test.mjs`.
 
 ### Batch cancellation (user-triggered stop)
 

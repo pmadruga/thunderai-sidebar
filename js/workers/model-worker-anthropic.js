@@ -20,172 +20,58 @@
  *  The original code has been released under the Apache License, Version 2.0.
  */
 
-import {
-    Anthropic,
-    describeAnthropicError
-} from '../api/anthropic.js';
-import { taLogger } from '../mzta-logger.js';
-
-let anthropic = null;
-let stopStreaming = false;
-let i18nStrings = null;
-let do_debug = false;
-let taLog = null;
+import { Anthropic, describeAnthropicError } from '../api/anthropic.js';
+import { ChatSession } from './chat-session.js';
+import { configureEndpointPolicy } from '../endpoint-policy.js';
 
 let conversationHistory = [];
-let assistantResponseAccumulator = '';
-let thinkingAccumulator = '';
+let previous_response_id = null;
+let client = null;
+let session = null;
+let tools = null;
+let strings = {};
+let contextSize = null;
 
 self.onmessage = async function(event) {
-    if (event.data.type === 'init') {
-        // console.log(">>>>>>>>>>>>>> event.data: " + JSON.stringify(event.data));
-        let config = { stream: true };
-        for (const key in event.data) {
-            if (key.startsWith('anthropic_')) {
-                let newKey = key.replace('anthropic_', '');
-                if (newKey === 'api_key') newKey = 'apiKey';
-                config[newKey] = event.data[key];
+    const data = event.data;
+    if (data.type === 'restoreHistory') {
+        session?.stop();
+        conversationHistory = Array.isArray(data.history) ? data.history : [];
+        previous_response_id = null;
+        if (session) { session.history = conversationHistory; session.resetResponseId(); }
+        return;
+    }
+    if (data.type === 'stop') { session?.stop(); return; }
+    try {
+        if (data.type === 'init') {
+            configureEndpointPolicy(data.allowed_http_origins || []);
+            const config = { stream: true };
+            for (const key in data) {
+                if (!key.startsWith('anthropic_') || key.startsWith('chatgpt_web_')) continue;
+                let name = key.slice('anthropic_'.length);
+                if (name === 'api_key') name = 'apiKey';
+                config[name] = data[key];
             }
+            client = new Anthropic(config);
+            strings = data.i18nStrings || {};
+            previous_response_id = null;
+            if (session) { session.client = client; session.strings = strings; session.resetResponseId(); }
+        } else if (data.type === 'setTools') {
+            tools = Array.isArray(data.tools) && data.tools.length ? data.tools : null;
+            if (session) session.tools = tools;
+        } else if (data.type === 'chatMessage' || data.type === 'toolResults') {
+            if (!client) throw new Error('AI provider is not configured');
+            if (!session) session = new ChatSession({
+                provider: 'anthropic', client, history: conversationHistory, strings,
+                emit: message => postMessage(message),
+                onResponseId: id => { previous_response_id = id; }, describeError: describeAnthropicError,
+            });
+            session.tools = tools;
+            session.contextSize = contextSize;
+            if (data.type === 'chatMessage') await session.send(data.message);
+            else await session.toolResults(data.results, data.requestId);
         }
-        anthropic = new Anthropic(config);
-        do_debug = event.data.do_debug;
-        i18nStrings = event.data.i18nStrings;
-        taLog = new taLogger('model-worker-anthropic', do_debug);
-    } else if (event.data.type === 'chatMessage') {
-        conversationHistory.push({ role: 'user', content: event.data.message });
-
-    const response = await anthropic.fetchResponse(conversationHistory);
-        postMessage({ type: 'messageSent' });
-
-        if (!response.ok) {
-            let error_message = '';
-            let errorDetail = '';
-            let error_text = '';
-            if(response.is_exception === true){
-                error_message = response.error;
-                // Network-level failure: no status/statusText exist on the returned object,
-                // and error_message already carries the provider name.
-                error_text = error_message;
-            }else{
-                try{
-                    const errorJSON = await response.json();
-                    errorDetail = JSON.stringify(errorJSON);
-                    error_message = errorJSON.error.message;
-                    if(response.status === 400){
-                        // A 400 naming a request parameter usually means the
-                        // selected model rejects an option the user configured;
-                        // say which one instead of only echoing the raw detail.
-                        error_message = describeAnthropicError(error_message, anthropic ? anthropic.model : '', i18nStrings);
-                    }
-                }catch(e){
-                    error_message = response.statusText;
-                }
-                taLog.log("error_message: " + JSON.stringify(error_message));
-                error_text = i18nStrings["anthropic_api_request_failed"] + ": " + response.status + " " + response.statusText + ", Detail: " + error_message + (errorDetail ? " " + errorDetail : "");
-            }
-            postMessage({ type: 'error', payload: error_text });
-            throw new Error("[ThunderAI] Claude API request failed: " + error_text);
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        let buffer = '';
-    
-        while (true) {
-            if (stopStreaming) {
-                stopStreaming = false;
-                reader.cancel();
-                taLog.log("AI full reasoning [STOPPED]: " + thinkingAccumulator);
-                taLog.log("AI full response [STOPPED]: " + assistantResponseAccumulator);
-                conversationHistory.push({ role: 'assistant', content: assistantResponseAccumulator });
-                assistantResponseAccumulator = '';
-                postMessage({ type: 'tokensDone', payload: { thinking: thinkingAccumulator } });
-                thinkingAccumulator = '';
-                break;
-            }
-            const { done, value } = await reader.read();
-            if (done) {
-                taLog.log("AI full reasoning: " + thinkingAccumulator);
-                taLog.log("AI full response: " + assistantResponseAccumulator);
-                conversationHistory.push({ role: 'assistant', content: assistantResponseAccumulator });
-                assistantResponseAccumulator = '';
-                postMessage({ type: 'tokensDone', payload: { thinking: thinkingAccumulator } });
-                thinkingAccumulator = '';
-                break;
-            }
-            // lots of low-level Claude response parsing stuff
-            const chunk = decoder.decode(value);
-            buffer += chunk;
-            // No per-chunk dump of `buffer`: taLog.log() only gates the console call,
-            // so the whole unconsumed buffer would be re-concatenated on every SSE
-            // chunk even with debug off.
-            const lines = buffer.split("\n");
-            buffer = lines.pop();
-            
-            for (const line of lines) {
-                const cleanLine = line.trim();
-
-                // Ignore ping events
-                if (cleanLine === '' || cleanLine.startsWith('event: ping')) {
-                    continue;
-                }
-
-                // Guarded at the call site: taLog.log() gates only the console call,
-                // so an unguarded concatenation would run per SSE line even with debug
-                // off. Placed after the ping filter so keep-alives stay out of the log,
-                // and logs cleanLine rather than JSON.stringify() as the other workers
-                // do: this stream is raw SSE ('event: ...' / 'data: {...}'), already a
-                // string, so stringifying would only re-quote it.
-                if (taLog.do_debug) taLog.log("line: " + cleanLine);
-
-                // Remove "data: " and parse the JSON
-                if (cleanLine.startsWith('data: ')) {
-                    const jsonPart = cleanLine.replace(/^data: /, '');
-                    let parsedData = null;
-
-                    try {
-                        parsedData = JSON.parse(jsonPart);
-                    } catch (e) {
-                        taLog.error("JSON parse error: " + e);
-                        continue;
-                    }
-
-                    // Events handling
-                    switch (parsedData.type) {
-                        case 'content_block_delta':
-                            if (parsedData.delta && parsedData.delta.type === 'thinking_delta' && typeof parsedData.delta.thinking === 'string') {
-                                const token = parsedData.delta.thinking;
-                                thinkingAccumulator += token;
-                                postMessage({ type: 'newThinkingToken', payload: { token } });
-                            } else if (parsedData.delta && typeof parsedData.delta.text === 'string') {
-                                const token = parsedData.delta.text;
-                                assistantResponseAccumulator += token;
-                                postMessage({ type: 'newToken', payload: { token } });
-                            }
-                            break;
-
-                        case 'content_block_start':
-                            // optional
-                            break;
-
-                        case 'message_start':
-                            // optional
-                            break;
-
-                        case 'message_stop':
-                            taLog.log("AI full reasoning: " + thinkingAccumulator);
-                            taLog.log("AI full response: " + assistantResponseAccumulator);
-                            conversationHistory.push({ role: 'assistant', content: assistantResponseAccumulator });
-                            assistantResponseAccumulator = '';
-                            postMessage({ type: 'tokensDone', payload: { thinking: thinkingAccumulator } });
-                            thinkingAccumulator = '';
-                            return; // end the loop
-                    }
-                }
-            }
-
-        }
-    } else if (event.data.type === 'stop') {
-        stopStreaming = true;
+    } catch (error) {
+        postMessage({ type: 'error', payload: 'AI request failed: ' + (error?.message || 'Unknown error'), history: conversationHistory });
     }
 };

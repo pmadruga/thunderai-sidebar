@@ -23,11 +23,15 @@
 // directly; anything that changes data is marked `write` and must be
 // confirmed by the user before it runs. There is deliberately no delete tool.
 
+import { getLocalSecret, setLocalSecret } from '../js/secure-settings.js';
+import { secureFetch, confirmEndpointAccess } from '../js/endpoint-policy.js';
+
 export const SP_DEFAULT_URL = 'http://127.0.0.1:3876';
 
 // Settings live in storage.local: the token is a credential and must not sync.
 export async function getSpSettings() {
-    const s = await browser.storage.local.get({ sp_api_url: SP_DEFAULT_URL, sp_api_token: '', sp_enabled: false });
+    const s = await browser.storage.local.get({ sp_api_url: SP_DEFAULT_URL, sp_enabled: false });
+    s.sp_api_token = await getLocalSecret('sp_api_token');
     return { url: s.sp_api_url.replace(/\/+$/, ''), token: s.sp_api_token, enabled: s.sp_enabled };
 }
 
@@ -42,7 +46,15 @@ export function spOriginPattern(url) {
 }
 
 export async function saveSpSettings(changes) {
-    await browser.storage.local.set(changes);
+    const ordinary = { ...changes };
+    if (Object.hasOwn(ordinary, 'sp_api_token')) {
+        await setLocalSecret('sp_api_token', String(ordinary.sp_api_token || ''));
+        delete ordinary.sp_api_token;
+    }
+    if (ordinary.sp_api_url && !(await confirmEndpointAccess(ordinary.sp_api_url))) {
+        throw new SpError('HTTP origin was not acknowledged', 'INSECURE_ENDPOINT');
+    }
+    await browser.storage.local.set(ordinary);
 }
 
 export class SpError extends Error {
@@ -59,7 +71,7 @@ async function spFetch(path, { method = 'GET', body } = {}) {
     }
     let response;
     try {
-        response = await fetch(url + path, {
+        response = await secureFetch(url + path, {
             method,
             headers: {
                 'Authorization': 'Bearer ' + token,
@@ -174,6 +186,7 @@ function taskBody(args) {
 
 /** Runs one tool call; returns a JSON-serialisable result. */
 export async function runSpTool(name, args = {}) {
+    validateToolArguments(name, args);
     switch (name) {
         case 'sp_list_tasks': {
             const params = new URLSearchParams();
@@ -229,12 +242,14 @@ export async function getSpTaskTitle(taskId) {
 export function describeSpTool(name, args = {}, taskTitle = null) {
     const target = `“${taskTitle ?? args.task_id}”`;
     const fields = [];
-    if (args.title) fields.push(`“${args.title}”`);
-    if (args.due_day) fields.push(browser.i18n.getMessage('sp_due', [String(args.due_day)]));
-    if (args.time_estimate_minutes) fields.push(browser.i18n.getMessage('sp_estimate', [String(args.time_estimate_minutes)]));
+    if (Object.hasOwn(args, 'title')) fields.push(`Title: ${String(args.title)}`);
+    if (Object.hasOwn(args, 'due_day')) fields.push(browser.i18n.getMessage('sp_due', [String(args.due_day)]));
+    if (Object.hasOwn(args, 'time_estimate_minutes')) fields.push(browser.i18n.getMessage('sp_estimate', [String(args.time_estimate_minutes)]));
     if (args.is_done === true) fields.push(browser.i18n.getMessage('sp_mark_done'));
     if (args.is_done === false) fields.push(browser.i18n.getMessage('sp_mark_not_done'));
-    if (args.notes) fields.push(browser.i18n.getMessage('sp_with_notes'));
+    if (Object.hasOwn(args, 'notes')) fields.push('Notes: ' + String(args.notes));
+    if (Object.hasOwn(args, 'project_id')) fields.push('Project: ' + String(args.project_id));
+    if (Object.hasOwn(args, 'tag_ids')) fields.push('Tags: ' + JSON.stringify(args.tag_ids));
     const detail = fields.join(', ');
     switch (name) {
         case 'sp_list_tasks': return browser.i18n.getMessage('sp_desc_list_tasks', [args.query ? `“${args.query}”` : '']);
@@ -247,4 +262,38 @@ export function describeSpTool(name, args = {}, taskTitle = null) {
         case 'sp_stop_tracking': return browser.i18n.getMessage('sp_desc_stop');
         default: return name;
     }
+}
+
+// Call once when tools are enabled for a chat, including after restoring a
+// remembered preference. Consent is in-memory and bound to this destination.
+export function requestToolReadConsent(provider, endpoint) {
+    const destination = endpoint || provider || 'the selected AI provider';
+    const message = browser.i18n.getMessage('sp_read_disclosure', [destination]) ||
+        `Allow this chat to read your Super Productivity tasks, notes, projects and tags, and send the results to ${destination}? Email content may influence which data the model requests. Changes still require confirmation.`;
+    return window.confirm(message);
+}
+
+export function validateToolArguments(name, args) {
+    if (!args || typeof args !== 'object' || Array.isArray(args)) throw new SpError('Tool arguments must be an object', 'INVALID_INPUT');
+    const allowed = {
+        sp_list_tasks: ['query', 'project_id', 'today_only', 'include_done'],
+        sp_list_projects: ['query'], sp_list_tags: ['query'], sp_get_current_task: [],
+        sp_create_task: ['title', 'notes', 'project_id', 'tag_ids', 'due_day', 'time_estimate_minutes'],
+        sp_update_task: ['task_id', 'title', 'notes', 'is_done', 'due_day', 'time_estimate_minutes', 'project_id'],
+        sp_start_task: ['task_id'], sp_stop_tracking: [],
+    }[name];
+    if (!allowed) throw new SpError('Unknown tool', 'UNKNOWN_TOOL');
+    for (const [field, value] of Object.entries(args)) {
+        if (!allowed.includes(field)) throw new SpError('Unexpected tool field: ' + field, 'INVALID_INPUT');
+        if (['is_done', 'today_only', 'include_done'].includes(field)) {
+            if (typeof value !== 'boolean') throw new SpError('Expected a boolean: ' + field, 'INVALID_INPUT');
+        } else if (field === 'time_estimate_minutes') {
+            if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) throw new SpError('Invalid time estimate', 'INVALID_INPUT');
+        } else if (field === 'tag_ids') {
+            if (!Array.isArray(value) || !value.every(id => typeof id === 'string')) throw new SpError('Invalid tag list', 'INVALID_INPUT');
+        } else if (typeof value !== 'string') throw new SpError('Expected text: ' + field, 'INVALID_INPUT');
+    }
+    if (['sp_update_task', 'sp_start_task'].includes(name) && !args.task_id) throw new SpError('task_id is required', 'INVALID_INPUT');
+    if (name === 'sp_create_task' && !args.title?.trim()) throw new SpError('title is required', 'INVALID_INPUT');
+    return args;
 }

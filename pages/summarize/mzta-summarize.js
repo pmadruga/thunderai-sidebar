@@ -1,3 +1,4 @@
+import { getSecureSettings, setSecureSettings, promptStorage } from '../../js/secure-settings.js';
 /*
  *  ThunderAI [https://micz.it/thunderbird-addon-thunderai/]
  *  Copyright (C) 2024 - 2026  Mic (m@micz.it)
@@ -82,7 +83,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
             }
         }
-        await browser.storage.sync.set(update_prefs);
+        await setSecureSettings(update_prefs);
     }
 
     await initializeSpecificIntegrationUI({
@@ -113,7 +114,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         summarize_use_specific_el.addEventListener('change', updateConnPanelTint);
     }
     updateConnPanelTint();
-    let prefs_summarize = await browser.storage.sync.get({ summarize_enabled_accounts: [], connection_type: 'chatgpt_web' });
+    let prefs_summarize = await getSecureSettings({ summarize_enabled_accounts: [], connection_type: 'chatgpt_web' });
 
     // Auto-summarize senders list
     // The toggle is a plain .option-input (saved by saveOptions), the list is saved explicitly.
@@ -311,7 +312,7 @@ function updateDisplayModeConstraint() {
   if (autoVal === '2' || autoVal === '3') {
     display_mode_el.value = 'inline';
     display_mode_el.disabled = true;
-    browser.storage.sync.set({ summarize_display_mode: 'inline' });
+    setSecureSettings({ summarize_display_mode: 'inline' });
   } else if (autoVal === '0') {
     display_mode_el.disabled = true;
   } else {
@@ -359,18 +360,18 @@ async function updateAutoSendersNotice(){
 }
 
 async function summarize_getAutoSendersList() {
-  let prefs = await browser.storage.sync.get({summarize_auto_senders_list: prefs_default.summarize_auto_senders_list});
+  let prefs = await getSecureSettings({summarize_auto_senders_list: prefs_default.summarize_auto_senders_list});
   return prefs.summarize_auto_senders_list;
 }
 
 function summarize_setAutoSendersList(summarize_auto_senders_list) {
-  browser.storage.sync.set({summarize_auto_senders_list: summarize_auto_senders_list});
+  setSecureSettings({summarize_auto_senders_list: summarize_auto_senders_list});
 }
 
 function resetSummarizeMaxMessages(){
   let summarize_max_messages = document.getElementById('summarize_max_messages');
   summarize_max_messages.value = prefs_default.summarize_max_messages;
-  browser.storage.sync.set({summarize_max_messages: prefs_default.summarize_max_messages});
+  setSecureSettings({summarize_max_messages: prefs_default.summarize_max_messages});
 }
 
 function saveOptions(e) {
@@ -408,7 +409,7 @@ function saveOptions(e) {
         console.error("[ThunderAI] Unhandled input type:", element.type);
     }
 
-  browser.storage.sync.set(options);
+  setSecureSettings(options);
 }
 
 async function restoreOptions() {
@@ -471,7 +472,7 @@ async function restoreOptions() {
     });
   }
 
-  let getting = await browser.storage.sync.get(prefs_default);
+  let getting = await getSecureSettings(prefs_default);
 
   let specialPrompts = await getSpecialPrompts();
   let addtags_prompt = specialPrompts.find(prompt => prompt.id === 'prompt_summarize');

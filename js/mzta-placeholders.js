@@ -1,3 +1,4 @@
+import { getSecureSettings, setSecureSettings, promptStorage } from './secure-settings.js';
 /*
  *  ThunderAI [https://micz.it/thunderbird-addon-thunderai/]
  *  Copyright (C) 2024 - 2026  Mic (m@micz.it)
@@ -722,19 +723,19 @@ export const placeholdersUtils = {
                     finalSubs['tags_full_list'] = placeholdersUtils.failSafePlaceholders(tags_full_list[0]);
                     break;
                 case 'thunderai_def_sign':
-                    let prefs_def_sign = await browser.storage.sync.get({ default_sign_name: prefs_default.default_sign_name });
+                    let prefs_def_sign = await getSecureSettings({ default_sign_name: prefs_default.default_sign_name });
                     finalSubs['thunderai_def_sign'] = placeholdersUtils.failSafePlaceholders(prefs_def_sign.default_sign_name);
                     break;
                 case 'thunderai_def_lang':
-                    let prefs_def_lang = await browser.storage.sync.get({ default_chatgpt_lang: prefs_default.default_chatgpt_lang });
+                    let prefs_def_lang = await getSecureSettings({ default_chatgpt_lang: prefs_default.default_chatgpt_lang });
                     finalSubs['thunderai_def_lang'] = placeholdersUtils.failSafePlaceholders(prefs_def_lang.default_chatgpt_lang);
                     break;
                 case 'thunderai_translate_lang':
-                    let prefs_translate_lang = await browser.storage.sync.get({ translate_lang: prefs_default.translate_lang });
+                    let prefs_translate_lang = await getSecureSettings({ translate_lang: prefs_default.translate_lang });
                     finalSubs['thunderai_translate_lang'] = placeholdersUtils.failSafePlaceholders(prefs_translate_lang.translate_lang);
                     break;
                 case 'thunderai_translate_exclude_lang':
-                    let prefs_translate_exclude_lang = await browser.storage.sync.get({ translate_exclude_lang: prefs_default.translate_exclude_lang });
+                    let prefs_translate_exclude_lang = await getSecureSettings({ translate_exclude_lang: prefs_default.translate_exclude_lang });
                     finalSubs['thunderai_translate_exclude_lang'] = placeholdersUtils.failSafePlaceholders(prefs_translate_exclude_lang.translate_exclude_lang);
                     break;
                 case 'mail_attachments_info':

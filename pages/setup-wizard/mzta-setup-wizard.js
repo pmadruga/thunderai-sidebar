@@ -1,3 +1,4 @@
+import { getSecureSettings, setSecureSettings } from '../../js/secure-settings.js';
 /*
  *  ThunderAI [https://micz.it/thunderbird-addon-thunderai/]
  *  Copyright (C) 2024 - 2026  Mic (m@micz.it)
@@ -94,7 +95,7 @@ function saveOptions(e) {
       console.error('[ThunderAI] Unhandled input type:', element.type);
       return;
   }
-  browser.storage.sync.set(options);
+  setSecureSettings(options);
 }
 
 async function restoreOptions() {
@@ -132,7 +133,7 @@ async function restoreOptions() {
       }
     });
   }
-  let getting = await browser.storage.sync.get(prefs_default);
+  let getting = await getSecureSettings(prefs_default);
   setCurrentChoice(getting);
 }
 
@@ -350,7 +351,7 @@ function goBack() {
 // ---- Boot ----------------------------------------------------------------
 
 document.addEventListener('DOMContentLoaded', async () => {
-  let prefs = await browser.storage.sync.get({
+  let prefs = await getSecureSettings({
     do_debug: prefs_default.do_debug,
     connection_type: prefs_default.connection_type,
   });

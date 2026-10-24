@@ -20,6 +20,7 @@
  *  The original code has been released under the Apache License, Version 2.0.
  */
 
+import { getSecureSettings, setSecureSettings } from '../js/secure-settings.js';
 import { prefs_default } from '../options/mzta-options-default.js';
 import './splitButton.js';   // registers the <split-button> custom element
 import './diffPicker.js';    // registers the <diff-picker> custom element
@@ -477,6 +478,20 @@ class MessagesArea extends HTMLElement {
         shadowRoot.appendChild(messagesAreaTemplate.content.cloneNode(true));
 
         this.messages = shadowRoot.querySelector('#messages');
+        // Links from model output must never navigate the privileged panel.
+        shadowRoot.addEventListener('click', event => {
+            const link = event.target.closest?.('a[href]');
+            if (!link) return;
+            event.preventDefault();
+            event.stopPropagation();
+            try {
+                const url = new URL(link.getAttribute('href'));
+                if (['https:', 'http:'].includes(url.protocol) && !url.username && !url.password) {
+                    browser.windows.openDefaultBrowser(url.href).catch(() => {});
+                }
+            } catch (_) { /* Relative and unsupported URLs stay inert. */ }
+        });
+
 
         this._jumpButton = shadowRoot.querySelector('#jumpToLatest');
         const jumpLabel = browser.i18n.getMessage("apiwebchat_scroll_to_latest");
@@ -957,13 +972,34 @@ class MessagesArea extends HTMLElement {
         turn.appendChild(card);
         confirm.focus();
         return new Promise(resolve => {
+            this._pendingToolConfirmations ||= new Set();
+            let settled = false;
             const finish = (ok) => {
+                if (settled) return;
+                settled = true;
+                this._pendingToolConfirmations.delete(finish);
                 actions.remove();
                 resolve(ok);
             };
+            this._pendingToolConfirmations.add(finish);
             confirm.addEventListener('click', () => finish(true), { once: true });
             cancel.addEventListener('click', () => finish(false), { once: true });
         }).then(ok => ({ ok, card }));
+    }
+
+    cancelToolConfirmations() {
+        for (const finish of [...(this._pendingToolConfirmations || [])]) finish(false);
+    }
+
+    clearConversation() {
+        this.cancelToolConfirmations();
+        this._removeThinkingIndicator();
+        this.messages.replaceChildren();
+        this.fullTextHTML = '';
+        this._streaming = null;
+        this._currentTurnEl = null;
+        this.accumulatingMessageEl = null;
+        this._setAnchor(null);
     }
 
     /** Adds the outcome line under a confirmation card. */
@@ -1266,7 +1302,7 @@ class MessagesArea extends HTMLElement {
 
         const fullTextHTMLAtAssignment = this.fullTextHTML.trim().replace(/^"|"$/g, '').replace(/^<p>&quot;/, '<p>').replace(/&quot;<\/p>$/, '</p>'); // strip quotation marks
         //console.log(">>>>>>>>>>>> fullTextHTMLAtAssignment: " + fullTextHTMLAtAssignment);
-        let reply_type_pref = await browser.storage.sync.get({ reply_type: prefs_default.reply_type });
+        let reply_type_pref = await getSecureSettings({ reply_type: prefs_default.reply_type });
 
         // Remember what the compact toolbar will need. It is only built when
         // this answer stops being the newest one (see _degradeFullActionBar):
@@ -1527,7 +1563,7 @@ class MessagesArea extends HTMLElement {
     // Anything unrecognised falls back to 'words' rather than reaching
     // buildHunks, where an unknown key would silently pick the default fn.
     async _resolveDiffGranularity() {
-        const prefs = await browser.storage.sync.get({ diff_granularity: prefs_default.diff_granularity });
+        const prefs = await getSecureSettings({ diff_granularity: prefs_default.diff_granularity });
         return (prefs.diff_granularity === 'sentences') ? 'sentences' : 'words';
     }
 

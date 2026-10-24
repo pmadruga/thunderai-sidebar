@@ -55,7 +55,7 @@
     "message": "More info",
     "description": ""
   },
-  "prompt_string":{
+  "prompt_string": {
     "message": "Prompt",
     "description": ""
   },
@@ -797,19 +797,19 @@
     "message": "Thinking",
     "description": ""
   },
-  "prefs_OptionText_max_prompt_length" : {
+  "prefs_OptionText_max_prompt_length": {
     "message": "Max prompt length",
     "description": ""
   },
-  "prefs_OptionText_max_prompt_length_Info" : {
+  "prefs_OptionText_max_prompt_length_Info": {
     "message": "This is the maximum number of characters that can be used in a prompt. Otherwise, an error message will be displayed. The value is not editable for the ChatGPT Web Interface. Set it to zero to disable the check.",
     "description": ""
   },
-  "prefs_OptionText_special_command_timeout" : {
+  "prefs_OptionText_special_command_timeout": {
     "message": "Special command timeout (ms)",
     "description": ""
   },
-  "prefs_OptionText_special_command_timeout_Info" : {
+  "prefs_OptionText_special_command_timeout_Info": {
     "message": "Time in milliseconds before a hung AI request (auto add-tags, spam filter, summarize, translate) is aborted. Increase it if you use slow local models. This applies only to API-based connections, not to the ChatGPT Web Interface.",
     "description": ""
   },
@@ -857,7 +857,7 @@
     "message": "The value must be a JSON object, enclosed in curly braces.",
     "description": ""
   },
-  "prefs_OptionText_openai_comp_extra_body" : {
+  "prefs_OptionText_openai_comp_extra_body": {
     "message": "Extra body data",
     "description": ""
   },
@@ -865,7 +865,7 @@
     "message": "Additional parameters to send with every API call, as a JSON object. Useful for options this service supports but ThunderAI doesn't expose, like disabling the thinking mode: {\"chat_template_kwargs\": {\"thinking\": false}} or {\"top_p\": 0.9}. The parameters managed by ThunderAI (model, messages, streaming, temperature) can't be overridden here. An invalid value is ignored.",
     "description": ""
   },
-  "prefs_OptionText_openai_comp_use_v1" : {
+  "prefs_OptionText_openai_comp_use_v1": {
     "message": "Keep the \"v1\" compatibility",
     "description": ""
   },
@@ -967,7 +967,7 @@
   },
   "prompt_add_tags_maxnum": {
     "message": "Limit the number of tags to",
-    "description": "" 
+    "description": ""
   },
   "prefs_OptionText_add_tags_hide_exclusions": {
     "message": "Hide excluded tags",
@@ -1278,12 +1278,12 @@
     "description": ""
   },
   "prefs_OptionText_Summarize_email_template": {
-     "message": "The template for a single email:",
-     "description": ""
+    "message": "The template for a single email:",
+    "description": ""
   },
   "prefs_OptionText_Summarize_email_separator": {
-     "message": "The separator between emails:",
-     "description": ""
+    "message": "The separator between emails:",
+    "description": ""
   },
   "prefs_OptionText_get_calendar_event_Sparks_not_present": {
     "message": "To use the calendar event and task features, please install the ThunderAI Sparks addon.",
@@ -1461,13 +1461,13 @@
     "message": "Current prompt text",
     "description": ""
   },
-  "prompt_spamfilter" : {
-    "message" : "Analyze for spam",
-    "description" : ""
+  "prompt_spamfilter": {
+    "message": "Analyze for spam",
+    "description": ""
   },
-  "prompt_spamfilter_full_text" : {
-    "message" : "Analyze the following email and determine if it is spam or not. Consider factors such as suspicious keywords, excessive promotional language, misleading subject lines, requests for personal information, and unusual sender addresses.\nProvide a value from 0 (not spam) to 100 (spam) and an explanation of no more than 10 words.\nIn case of missing message data, set the value to 0 (not spam), and give the reason.\nGenerate a response in JSON format only. Do not include any additional text or explanation; provide only the JSON. Here is the format to be used:\n{\n\"explanation\": \"Brief explanation of your reasoning\",\n\"spamValue\": <integer from 0 to 100>\n}\nHere there are the mail information:\nSender: \"{%author%}\"\nSubject: \"{%mail_subject%}\"\nHtml body: \"{%mail_html_body%}\"",
-    "description" : ""
+  "prompt_spamfilter_full_text": {
+    "message": "Analyze the following email and determine if it is spam or not. Consider factors such as suspicious keywords, excessive promotional language, misleading subject lines, requests for personal information, and unusual sender addresses.\nProvide a value from 0 (not spam) to 100 (spam) and an explanation of no more than 10 words.\nIn case of missing message data, set the value to 0 (not spam), and give the reason.\nGenerate a response in JSON format only. Do not include any additional text or explanation; provide only the JSON. Here is the format to be used:\n{\n\"explanation\": \"Brief explanation of your reasoning\",\n\"spamValue\": <integer from 0 to 100>\n}\nHere there are the mail information:\nSender: \"{%author%}\"\nSubject: \"{%mail_subject%}\"\nHtml body: \"{%mail_html_body%}\"",
+    "description": ""
   },
   "Summarize_PageTitle": {
     "message": "Manage Summarize Settings",
@@ -2091,9 +2091,9 @@
     "message": "Attempting to connect to $api_string$ using the following configuration...",
     "description": "",
     "placeholders": {
-        "api_string": {
-            "content": "$1"
-        }
+      "api_string": {
+        "content": "$1"
+      }
     }
   },
   "_api_connecting_model": {
@@ -2124,9 +2124,9 @@
     "message": "Are you sure you want to apply the configuration \"$config_name$\"?",
     "description": "",
     "placeholders": {
-        "config_name": {
-            "content": "$1"
-        }
+      "config_name": {
+        "content": "$1"
+      }
     }
   },
   "apiwebchat_selection_info": {
@@ -2396,20 +2396,20 @@
     "description": "Label for the option to enable automatic AI summarization of email messages"
   },
   "prefs_OptionText_auto_summary_Info": {
-      "message": "If checked, ThunderAI will automatically generate and display AI summaries above email messages when they are opened. Note that this means all messages you preview will immediately be sent to the configured AI service.",
-      "description": "Tooltip/info text explaining the automatic AI summarization option and its privacy implications"
+    "message": "If checked, ThunderAI will automatically generate and display AI summaries above email messages when they are opened. Note that this means all messages you preview will immediately be sent to the configured AI service.",
+    "description": "Tooltip/info text explaining the automatic AI summarization option and its privacy implications"
   },
   "auto_summary_title": {
-      "message": "ThunderAI Summary",
-      "description": "Title heading shown above the automatically generated AI summary in the message pane"
+    "message": "ThunderAI Summary",
+    "description": "Title heading shown above the automatically generated AI summary in the message pane"
   },
   "auto_summary_generating": {
-      "message": "Generating AI summary...",
-      "description": "Status message shown while the AI summary is being generated"
+    "message": "Generating AI summary...",
+    "description": "Status message shown while the AI summary is being generated"
   },
   "auto_summary_failed": {
-      "message": "Failed to generate AI summary. Please confirm your settings and try again.",
-      "description": "Error message shown when the automatic AI summary generation fails"
+    "message": "Failed to generate AI summary. Please confirm your settings and try again.",
+    "description": "Error message shown when the automatic AI summary generation fails"
   },
   "customPrompts_export_include_api_settings": {
     "message": "Do you want to include the API settings in the export? Be aware that also the API Key will be saved in the file!",
@@ -2435,192 +2435,192 @@
     "message": "copy",
     "description": ""
   },
-   "spam_check_in_progress": {
-      "message": "Spam check in progress...",
-      "description": ""
+  "spam_check_in_progress": {
+    "message": "Spam check in progress...",
+    "description": ""
   },
   "prefs_OptionText_summarize_auto": {
-      "message": "Auto-summarize messages",
-      "description": ""
+    "message": "Auto-summarize messages",
+    "description": ""
   },
   "prefs_OptionText_summarize_auto_Info": {
-      "message": "Choose whether to automatically generate summaries when viewing messages. Requires an API-based connection (not ChatGPT Web).",
-      "description": ""
+    "message": "Choose whether to automatically generate summaries when viewing messages. Requires an API-based connection (not ChatGPT Web).",
+    "description": ""
   },
   "prefs_OptionText_summarize_display_mode": {
-      "message": "Display summary in",
-      "description": ""
+    "message": "Display summary in",
+    "description": ""
   },
   "prefs_OptionText_summarize_display_mode_Info": {
-      "message": "Choose where the summary result is displayed. Inline mode shows a summary banner directly in the message pane. Chat window mode opens the AI chat window.",
-      "description": ""
+    "message": "Choose where the summary result is displayed. Inline mode shows a summary banner directly in the message pane. Chat window mode opens the AI chat window.",
+    "description": ""
   },
   "prefs_OptionText_summarize_max_display_length": {
-      "message": "Max display length",
-      "description": ""
+    "message": "Max display length",
+    "description": ""
   },
   "prefs_OptionText_summarize_max_display_length_Info": {
-      "message": "Maximum number of characters to display in the inline summary. Set to 0 for no limit.",
-      "description": ""
+    "message": "Maximum number of characters to display in the inline summary. Set to 0 for no limit.",
+    "description": ""
   },
   "prefs_OptionText_summarize_max_messages": {
-      "message": "Max messages",
-      "description": ""
+    "message": "Max messages",
+    "description": ""
   },
   "prefs_OptionText_summarize_max_messages_Info": {
-      "message": "Maximum number of messages that can be summarized at once in webchat mode. Above this limit the operation is blocked with a warning. Set to 0 for no limit.",
-      "description": ""
+    "message": "Maximum number of messages that can be summarized at once in webchat mode. Above this limit the operation is blocked with a warning. Set to 0 for no limit.",
+    "description": ""
   },
   "prefs_OptionText_summarize_strip_formatting": {
-      "message": "Strip formatting",
-      "description": ""
+    "message": "Strip formatting",
+    "description": ""
   },
   "prefs_OptionText_summarize_strip_formatting_Info": {
-      "message": "Remove HTML and Markdown formatting from the AI-generated summary, showing plain text only.",
-      "description": ""
+    "message": "Remove HTML and Markdown formatting from the AI-generated summary, showing plain text only.",
+    "description": ""
   },
   "Summarize_auto_senders_title": {
-      "message": "Automatic summary sender list",
-      "description": ""
+    "message": "Automatic summary sender list",
+    "description": ""
   },
   "Summarize_auto_senders_infoline": {
-      "message": "Emails coming from these senders are summarized automatically, without any click. The summary is generated when the email is received, or when you open it if it was not caught on reception.",
-      "description": ""
+    "message": "Emails coming from these senders are summarized automatically, without any click. The summary is generated when the email is received, or when you open it if it was not caught on reception.",
+    "description": ""
   },
   "Summarize_auto_senders_infoline2": {
-      "message": "Add one email address per line, or separated by a comma. Use \"@domain.com\" to match every sender of a whole domain.",
-      "description": ""
+    "message": "Add one email address per line, or separated by a comma. Use \"@domain.com\" to match every sender of a whole domain.",
+    "description": ""
   },
   "Summarize_auto_senders_api_warning": {
-      "message": "Warning: these summaries are generated automatically, so every email from these senders consumes API tokens and may increase the cost of your AI subscription. Keep the list as short as possible.",
-      "description": ""
+    "message": "Warning: these summaries are generated automatically, so every email from these senders consumes API tokens and may increase the cost of your AI subscription. Keep the list as short as possible.",
+    "description": ""
   },
   "Summarize_auto_senders_notice": {
-      "message": "Auto-summarize is disabled, but the summary is still generated automatically for the senders in the list below.",
-      "description": ""
+    "message": "Auto-summarize is disabled, but the summary is still generated automatically for the senders in the list below.",
+    "description": ""
   },
   "Summarize_auto_senders_disabled_note": {
-      "message": "Not available when auto-summarize is set to generate the summary on email receive: in that mode every incoming email is already summarized.",
-      "description": ""
+    "message": "Not available when auto-summarize is set to generate the summary on email receive: in that mode every incoming email is already summarized.",
+    "description": ""
   },
   "prefs_OptionText_summarize_auto_senders": {
-      "message": "Summarize these senders automatically",
-      "description": ""
+    "message": "Summarize these senders automatically",
+    "description": ""
   },
   "prefs_OptionText_summarize_auto_senders_Info": {
-      "message": "If enabled, emails coming from the senders listed below are summarized automatically, even when auto-summarize is disabled above.",
-      "description": ""
+    "message": "If enabled, emails coming from the senders listed below are summarized automatically, even when auto-summarize is disabled above.",
+    "description": ""
   },
   "prefs_OptionText_summarize_auto_senders_list_Info": {
-      "message": "Sender addresses to summarize automatically:",
-      "description": ""
+    "message": "Sender addresses to summarize automatically:",
+    "description": ""
   },
   "summarize_see_more": {
-      "message": "See more",
-      "description": ""
+    "message": "See more",
+    "description": ""
   },
   "summarize_see_less": {
-      "message": "See less",
-      "description": ""
+    "message": "See less",
+    "description": ""
   },
   "summarize_title": {
-      "message": "ThunderAI Overview",
-      "description": ""
+    "message": "ThunderAI Overview",
+    "description": ""
   },
   "summarize_too_many_messages": {
-      "message": "You selected $SELECTED$ messages, but at most $MAX$ can be summarized at once. Please select fewer messages.",
-      "description": "Shown when the user tries to summarize more messages than the configured limit",
-      "placeholders": {
-          "selected": {
-              "content": "$1"
-          },
-          "max": {
-              "content": "$2"
-          }
+    "message": "You selected $SELECTED$ messages, but at most $MAX$ can be summarized at once. Please select fewer messages.",
+    "description": "Shown when the user tries to summarize more messages than the configured limit",
+    "placeholders": {
+      "selected": {
+        "content": "$1"
+      },
+      "max": {
+        "content": "$2"
       }
+    }
   },
   "get_ai_summary": {
-      "message": "AI Summary",
-      "description": ""
+    "message": "AI Summary",
+    "description": ""
   },
   "batch_stop_processing": {
-      "message": "Stop processing",
-      "description": "Label of the button, shown in the popup, that stops the running email processing jobs"
+    "message": "Stop processing",
+    "description": "Label of the button, shown in the popup, that stops the running email processing jobs"
   },
   "batch_stopping": {
-      "message": "Stopping...",
-      "description": "Label shown on the stop button after the user requested to stop the running email processing jobs"
+    "message": "Stopping...",
+    "description": "Label shown on the stop button after the user requested to stop the running email processing jobs"
   },
   "batch_stop_tooltip": {
-      "message": "Stop the running email processing jobs (auto add-tags, spam filter, summarize, translate)",
-      "description": "Tooltip of the stop button in the popup"
+    "message": "Stop the running email processing jobs (auto add-tags, spam filter, summarize, translate)",
+    "description": "Tooltip of the stop button in the popup"
   },
   "batch_progress_x": {
-      "message": "$COUNT$ messages processed",
-      "description": "Progress indicator shown in the popup while a batch of emails is being processed",
-      "placeholders": {
-          "count": {
-              "content": "$1"
-          }
+    "message": "$COUNT$ messages processed",
+    "description": "Progress indicator shown in the popup while a batch of emails is being processed",
+    "placeholders": {
+      "count": {
+        "content": "$1"
       }
+    }
   },
   "batch_stopped_notice": {
-      "message": "Email processing stopped. $COUNT$ messages were processed.",
-      "description": "Notice shown after the user stopped the running email processing jobs, reporting how many messages were processed before stopping",
-      "placeholders": {
-          "count": {
-              "content": "$1"
-          }
+    "message": "Email processing stopped. $COUNT$ messages were processed.",
+    "description": "Notice shown after the user stopped the running email processing jobs, reporting how many messages were processed before stopping",
+    "placeholders": {
+      "count": {
+        "content": "$1"
       }
+    }
   },
   "batch_stop_source": {
-      "message": "Batch stop",
-      "description": "Source label shown as the prefix of the notice displayed when the user stops the running email processing jobs"
+    "message": "Batch stop",
+    "description": "Source label shown as the prefix of the notice displayed when the user stops the running email processing jobs"
   },
   "summarize_collapse": {
-      "message": "Collapse summary",
-      "description": ""
+    "message": "Collapse summary",
+    "description": ""
   },
   "summarize_generating": {
-      "message": "Generating summary...",
-      "description": ""
+    "message": "Generating summary...",
+    "description": ""
   },
   "summarize_error": {
-      "message": "Failed to generate summary",
-      "description": ""
+    "message": "Failed to generate summary",
+    "description": ""
   },
   "summarize_error_no_message_id": {
-      "message": "Could not read the message: the summary would have been generated from the subject only.",
-      "description": "Shown in the summary panel when the message id is missing, so the message body cannot be read"
+    "message": "Could not read the message: the summary would have been generated from the subject only.",
+    "description": "Shown in the summary panel when the message id is missing, so the message body cannot be read"
   },
   "summarize_click_to_generate": {
-      "message": "Click here to generate a summary",
-      "description": ""
+    "message": "Click here to generate a summary",
+    "description": ""
   },
-   "summarize_chatgpt_web_not_supported": {
-       "message": "Auto-summary requires an API-based connection. Please configure an API connection in ThunderAI settings.",
-       "description": ""
-   },
-   "summarize_refresh": {
-       "message": "Refresh summary",
-       "description": ""
-   },
-   "spamfilter_refresh": {
-       "message": "Refresh spam report",
-       "description": ""
-   },
-   "spamfilter_delete": {
-       "message": "Delete spam report",
-       "description": ""
-   },
-   "summarize_delete": {
-       "message": "Delete summary",
-       "description": ""
-   },
-   "generic_error_dismiss": {
-       "message": "Dismiss",
-       "description": "Menu item to dismiss a generic error panel shown in the message display."
-   },
+  "summarize_chatgpt_web_not_supported": {
+    "message": "Auto-summary requires an API-based connection. Please configure an API connection in ThunderAI settings.",
+    "description": ""
+  },
+  "summarize_refresh": {
+    "message": "Refresh summary",
+    "description": ""
+  },
+  "spamfilter_refresh": {
+    "message": "Refresh spam report",
+    "description": ""
+  },
+  "spamfilter_delete": {
+    "message": "Delete spam report",
+    "description": ""
+  },
+  "summarize_delete": {
+    "message": "Delete summary",
+    "description": ""
+  },
+  "generic_error_dismiss": {
+    "message": "Dismiss",
+    "description": "Menu item to dismiss a generic error panel shown in the message display."
+  },
   "prefs_OptionText_translate": {
     "message": "Translate email",
     "description": ""
@@ -2781,15 +2781,15 @@
     "message": "Try ThunderStats!",
     "description": ""
   },
-  "prefs_OptionText_chatgpt_win_pos_text":{
+  "prefs_OptionText_chatgpt_win_pos_text": {
     "message": "AI chat window position",
     "description": ""
   },
-  "prefs_OptionText_chatgpt_win_top":{
+  "prefs_OptionText_chatgpt_win_top": {
     "message": "Top",
     "description": ""
   },
-  "prefs_OptionText_chatgpt_win_left":{
+  "prefs_OptionText_chatgpt_win_left": {
     "message": "Left",
     "description": ""
   },
@@ -2945,6 +2945,30 @@
     "message": "Chat about this email",
     "description": "Popup menu entry that opens the chat with the selected email(s) as context, without sending a prompt."
   },
+  "chat_history_clear": {
+    "message": "Clear saved chat",
+    "description": ""
+  },
+  "chat_history_private": {
+    "message": "Chat history is encrypted and saved only on this device. Clear this email conversation's saved chat.",
+    "description": ""
+  },
+  "chat_history_clear_confirm": {
+    "message": "Delete the saved chat for this email conversation? Your emails will not be deleted.",
+    "description": ""
+  },
+  "chat_history_save_error": {
+    "message": "This chat could not be saved locally. Keep this panel open to avoid losing it.",
+    "description": ""
+  },
+  "chat_history_load_error": {
+    "message": "The saved chat could not be restored. Close and reopen the panel to try again. Your saved history has not been replaced.",
+    "description": ""
+  },
+  "chat_history_interrupted": {
+    "message": "This response was interrupted before it finished.",
+    "description": ""
+  },
   "chat_email_context_intro": {
     "message": "The following email conversation is the context for this chat. Answer my questions about it. Reply in the language I write in, and keep answers concise unless I ask for detail.",
     "description": ""
@@ -3001,7 +3025,7 @@
     "message": "Automatically save the window position when using the close button.",
     "description": ""
   },
-  "prefs_chatgpt_win_position_info":{
+  "prefs_chatgpt_win_position_info": {
     "message": "Leave empty to use the default position.",
     "description": ""
   },
@@ -3169,7 +3193,7 @@
     "message": "Advanced options",
     "description": "Label of the app-level advanced options disclosure on the options page"
   },
-  "prefs_privacy_more_info":{
+  "prefs_privacy_more_info": {
     "message": "Click here for more info about privacy"
   },
   "connTest_idle": {
@@ -3530,16 +3554,135 @@
     "message": "Context window: $USED$ of $SIZE$ tokens used ($PCT$%)",
     "description": "Tooltip on the used / total context meter under the chat input (Side Panel fork)",
     "placeholders": {
-      "used": { "content": "$1" },
-      "size": { "content": "$2" },
-      "pct": { "content": "$3" }
+      "used": {
+        "content": "$1"
+      },
+      "size": {
+        "content": "$2"
+      },
+      "pct": {
+        "content": "$3"
+      }
     }
   },
   "context_meter_tokens": {
     "message": "$USED$ tokens",
     "description": "Context meter when the server doesn't report its context size (Side Panel fork)",
     "placeholders": {
-      "used": { "content": "$1" }
+      "used": {
+        "content": "$1"
+      }
     }
+  },
+  "chat_model_label": {
+    "message": "Model",
+    "description": "Label for the model selector in the chat input bar"
+  },
+  "chat_model_refresh": {
+    "message": "Refresh available models",
+    "description": "Accessible label and tooltip for refreshing the chat model list"
+  },
+  "chat_model_loading": {
+    "message": "Loading models…",
+    "description": "Chat model list loading status"
+  },
+  "chat_model_empty": {
+    "message": "No models found. You can still use the current model.",
+    "description": "Chat model list empty status"
+  },
+  "chat_model_error": {
+    "message": "Could not load models. You can still use the current model; try refreshing.",
+    "description": "Chat model list failure status"
+  },
+  "secure_settings_unavailable": {
+    "message": "Secure settings are unavailable. Unlock your system key store, then try again.",
+    "description": ""
+  },
+  "secure_settings_save_error": {
+    "message": "Settings could not be saved securely. No plaintext credential fallback was used.",
+    "description": ""
+  },
+  "chat_worker_failed": {
+    "message": "The model connection stopped unexpectedly. Please try again.",
+    "description": ""
+  },
+  "chat_history_deleted_elsewhere": {
+    "message": "This saved chat was deleted in another window. Start a new conversation to continue.",
+    "description": ""
+  },
+  "sp_done": {
+    "message": "Done",
+    "description": ""
+  },
+  "sp_read_disclosure": {
+    "message": "Allow task access for this chat? Task notes, projects and tags can be sent to $1. Instructions inside emails may influence which task data the model requests.",
+    "description": ""
+  },
+  "insecure_http_confirm": {
+    "message": "Allow an unencrypted connection to $1? Email text, chat messages and credentials may be visible to others on the network. This approval applies only to this server origin on this device.",
+    "description": ""
+  },
+  "importPrompts_invalidVersion": {
+    "message": "This prompt backup version is not supported.",
+    "description": ""
+  },
+  "customPrompts_invalidPrompts": {
+    "message": "The selected file does not contain valid prompts.",
+    "description": ""
+  },
+  "Reset": {
+    "message": "Reset",
+    "description": ""
+  },
+  "chat_history_retention_label": {
+    "message": "Keep saved email chats for days",
+    "description": ""
+  },
+  "chat_history_retention_help": {
+    "message": "Default: 90 days. Set to 0 to stop saving and delete saved email chats.",
+    "description": ""
+  },
+  "chat_history_budget_label": {
+    "message": "Maximum saved chat storage (MiB)",
+    "description": ""
+  },
+  "chat_history_budget_help": {
+    "message": "Default: 50 MiB. Oldest chats are removed when the storage limit is reached. Allowed range: 1 to 500 MiB.",
+    "description": ""
+  },
+  "chat_history_storage_help": {
+    "message": "Saved email chats are encrypted on this device. These controls do not delete emails or provider records.",
+    "description": ""
+  },
+  "chat_history_clear_all": {
+    "message": "Delete all saved chats",
+    "description": ""
+  },
+  "chat_history_disable_confirm": {
+    "message": "Stop saving email chats and delete all saved chats on this device? Your emails and provider records will not be deleted.",
+    "description": ""
+  },
+  "chat_history_clear_all_confirm": {
+    "message": "Delete all saved email chats on this device? Your emails and provider records will not be deleted. New chats will still be saved according to your settings.",
+    "description": ""
+  },
+  "chat_history_all_cleared": {
+    "message": "All saved email chats on this device were deleted.",
+    "description": ""
+  },
+  "chat_history_saving_disabled": {
+    "message": "Saving is disabled and saved email chats on this device were deleted.",
+    "description": ""
+  },
+  "chat_history_settings_saved": {
+    "message": "Chat history settings saved on this device.",
+    "description": ""
+  },
+  "chat_history_settings_error": {
+    "message": "Chat history settings or deletion could not be completed. Please try again.",
+    "description": ""
+  },
+  "chat_context_changed": {
+    "message": "The email conversation changed. Close and reopen the chat to continue with the new conversation."
   }
 }

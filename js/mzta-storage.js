@@ -16,6 +16,8 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+import { secureLocalRecords } from './secure-settings.js';
+
 import { taLogger } from './mzta-logger.js';
 
 export class taStorage {
@@ -53,7 +55,7 @@ export class taStorage {
         this.taLog.log('[getRecord] messageId: ' + messageId);
         try {
             let key = this._buildKey(messageId);
-            let result = await messenger.storage.local.get(key);
+            let result = await secureLocalRecords.get(key);
             let record = result[key] || null;
             this.taLog.log('[getRecord] record found: ' + (record !== null));
             return record;
@@ -111,7 +113,7 @@ export class taStorage {
                 ts: now,
             };
             record.ts = now;
-            await messenger.storage.local.set({ [key]: record });
+            await secureLocalRecords.set({ [key]: record });
         } catch (e) {
             this.taLog.error('writeSpam error: ' + e);
         }
@@ -124,7 +126,7 @@ export class taStorage {
     async getAllSpamRecords() {
         this.taLog.log('[getAllSpamRecords] loading all spam records');
         try {
-            let all = await messenger.storage.local.get(null);
+            let all = await secureLocalRecords.get(null);
             let result = {};
             for (let [key, record] of Object.entries(all)) {
                 if (!key.startsWith(taStorage.STORAGE_KEY_PREFIX)) continue;
@@ -169,10 +171,10 @@ export class taStorage {
             const remainingFields = Object.keys(record).filter(k => k !== 'v' && k !== 'ts');
             if (remainingFields.length === 0) {
                 this.taLog.log('[deleteSpamField] no remaining fields, deleting entire record');
-                await messenger.storage.local.remove(key);
+                await secureLocalRecords.remove(key);
             } else {
                 this.taLog.log('[deleteSpamField] remaining fields: ' + remainingFields.join(', '));
-                await messenger.storage.local.set({ [key]: record });
+                await secureLocalRecords.set({ [key]: record });
             }
         } catch (e) {
             this.taLog.error('deleteSpamField error: ' + e);
@@ -207,7 +209,7 @@ export class taStorage {
                 ts: now,
             };
             record.ts = now;
-            await messenger.storage.local.set({ [key]: record });
+            await secureLocalRecords.set({ [key]: record });
         } catch (e) {
             this.taLog.error('writeSummary error: ' + e);
         }
@@ -220,7 +222,7 @@ export class taStorage {
     async getAllSummaryRecords() {
         this.taLog.log('[getAllSummaryRecords] loading all summary records');
         try {
-            let all = await messenger.storage.local.get(null);
+            let all = await secureLocalRecords.get(null);
             let result = {};
             for (let [key, record] of Object.entries(all)) {
                 if (!key.startsWith(taStorage.STORAGE_KEY_PREFIX)) continue;
@@ -261,10 +263,10 @@ export class taStorage {
             const remainingFields = Object.keys(record).filter(k => k !== 'v' && k !== 'ts');
             if (remainingFields.length === 0) {
                 this.taLog.log('[deleteSummaryField] no remaining fields, deleting entire record');
-                await messenger.storage.local.remove(key);
+                await secureLocalRecords.remove(key);
             } else {
                 this.taLog.log('[deleteSummaryField] remaining fields: ' + remainingFields.join(', '));
-                await messenger.storage.local.set({ [key]: record });
+                await secureLocalRecords.set({ [key]: record });
             }
         } catch (e) {
             this.taLog.error('deleteSummaryField error: ' + e);
@@ -311,7 +313,7 @@ export class taStorage {
                 ts: now
             };
             record.ts = now;
-            await messenger.storage.local.set({ [key]: record });
+            await secureLocalRecords.set({ [key]: record });
         } catch (e) {
             this.taLog.error('writeTranslation error: ' + e);
         }
@@ -324,7 +326,7 @@ export class taStorage {
     async getAllTranslationRecords() {
         this.taLog.log('[getAllTranslationRecords] loading all translation records');
         try {
-            let all = await messenger.storage.local.get(null);
+            let all = await secureLocalRecords.get(null);
             let result = {};
             for (let [key, record] of Object.entries(all)) {
                 if (!key.startsWith(taStorage.STORAGE_KEY_PREFIX)) continue;
@@ -365,10 +367,10 @@ export class taStorage {
             const remainingFields = Object.keys(record).filter(k => k !== 'v' && k !== 'ts');
             if (remainingFields.length === 0) {
                 this.taLog.log('[deleteTranslationField] no remaining fields, deleting entire record');
-                await messenger.storage.local.remove(key);
+                await secureLocalRecords.remove(key);
             } else {
                 this.taLog.log('[deleteTranslationField] remaining fields: ' + remainingFields.join(', '));
-                await messenger.storage.local.set({ [key]: record });
+                await secureLocalRecords.set({ [key]: record });
             }
         } catch (e) {
             this.taLog.error('deleteTranslationField error: ' + e);
@@ -383,7 +385,7 @@ export class taStorage {
         this.taLog.log('[deleteRecord] messageId: ' + messageId);
         try {
             let key = this._buildKey(messageId);
-            await messenger.storage.local.remove(key);
+            await secureLocalRecords.remove(key);
         } catch (e) {
             this.taLog.error('deleteRecord error: ' + e);
         }
@@ -401,7 +403,7 @@ export class taStorage {
             return 0;
         }
         try {
-            let all = await messenger.storage.local.get(null);
+            let all = await secureLocalRecords.get(null);
             let cutoff = Date.now() - (maxAgeDays * 24 * 60 * 60 * 1000);
             let keysToDelete = [];
             for (let key of Object.keys(all)) {
@@ -415,7 +417,7 @@ export class taStorage {
             }
             this.taLog.log('[cleanup] found ' + keysToDelete.length + ' records older than ' + maxAgeDays + ' days');
             if (keysToDelete.length > 0) {
-                await messenger.storage.local.remove(keysToDelete);
+                await secureLocalRecords.remove(keysToDelete);
             }
             return keysToDelete.length;
         } catch (e) {
@@ -430,10 +432,9 @@ export class taStorage {
      */
     static async clearAllRecords() {
         try {
-            let all = await messenger.storage.local.get(null);
-            let keysToDelete = Object.keys(all).filter(k => k.startsWith(taStorage.STORAGE_KEY_PREFIX));
+            let keysToDelete = await secureLocalRecords.keys();
             if (keysToDelete.length > 0) {
-                await messenger.storage.local.remove(keysToDelete);
+                await secureLocalRecords.remove(keysToDelete);
             }
             return keysToDelete.length;
         } catch (e) {

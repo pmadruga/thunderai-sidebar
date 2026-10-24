@@ -1,3 +1,4 @@
+import { getSecureSettings, setSecureSettings, promptStorage } from './secure-settings.js';
 /*
  *  ThunderAI [https://micz.it/thunderbird-addon-thunderai/]
  *  Copyright (C) 2024 - 2026  Mic (m@micz.it)
@@ -651,7 +652,7 @@ export async function getTagsList(){
 }
 
 export async function createTag(tag) {
-  let prefs_tag = await browser.storage.sync.get({ add_tags_first_uppercase: prefs_default.add_tags_first_uppercase });
+  let prefs_tag = await getSecureSettings({ add_tags_first_uppercase: prefs_default.add_tags_first_uppercase });
   if(prefs_tag.add_tags_first_uppercase) tag = tag.toLowerCase().charAt(0).toUpperCase() + tag.toLowerCase().slice(1);
   try {
     const tagKey = '$ta-' + generateCallID(16) + '-' + sanitizeString(tag); // Ensure uniqueness with a longer random ID
@@ -1206,7 +1207,7 @@ function formatBytes(bytes, decimals = 2) {
 // because the storage.sync has a too narrow limit, see https://github.com/micz/ThunderAI/issues/129
 export async function migrateCustomPromptsStorage(){
   //check if storage.sync has custom prompts
-  let custom_prompts_sync = await browser.storage.sync.get({_custom_prompt: null});
+  let custom_prompts_sync = await getSecureSettings({_custom_prompt: null});
   if(custom_prompts_sync._custom_prompt === null){
     // There are no custom prompts in storage.sync, nothing to do
     // console.log("migrateCustomPromptsStorage: no custom prompts in storage.sync, nothing to do");
@@ -1222,7 +1223,7 @@ export async function migrateCustomPromptsStorage(){
   }
 
   //copy custom prompts from storage.sync to storage.local
-  await browser.storage.local.set({_custom_prompt: custom_prompts_sync._custom_prompt});
+  await promptStorage.set({_custom_prompt: custom_prompts_sync._custom_prompt});
   await browser.storage.sync.remove("_custom_prompt");
   // console.log("migrateCustomPromptsStorage: migrated custom prompts from storage.sync to storage.local");
 }
@@ -1230,7 +1231,7 @@ export async function migrateCustomPromptsStorage(){
 // Do the same for the default prompts properties
 export async function migrateDefaultPromptsPropStorage(){
   //check if storage.sync has default prompts properties
-  let default_prompts_properties_sync = await browser.storage.sync.get({_default_prompts_properties: null});
+  let default_prompts_properties_sync = await getSecureSettings({_default_prompts_properties: null});
   if(default_prompts_properties_sync._default_prompts_properties === null){
     // There are no default prompts properties in storage.sync, nothing to do
     // console.log("migrateDefaultPromptsPropStorage: no default prompts properties in storage.sync, nothing to do");
@@ -1246,7 +1247,7 @@ export async function migrateDefaultPromptsPropStorage(){
   }
 
   //copy default prompts properties from storage.sync to storage.local
-  await browser.storage.local.set({_default_prompts_properties: default_prompts_properties_sync._default_prompts_properties});
+  await promptStorage.set({_default_prompts_properties: default_prompts_properties_sync._default_prompts_properties});
   await browser.storage.sync.remove("_default_prompts_properties");
   // console.log("migrateDefaultPromptsPropStorage: migrated default prompts properties from storage.sync to storage.local");
 }

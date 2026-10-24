@@ -1,3 +1,4 @@
+import { getSecureSettings, setSecureSettings, promptStorage } from '../../js/secure-settings.js';
 /*
  *  ThunderAI [https://micz.it/thunderbird-addon-thunderai/]
  *  Copyright (C) 2024 - 2026  Mic (m@micz.it)
@@ -81,7 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                  }
              }
         }
-        await browser.storage.sync.set(update_prefs);
+        await setSecureSettings(update_prefs);
     }
 
     await initializeSpecificIntegrationUI({
@@ -96,7 +97,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll(".option-input").forEach(element => {
         element.addEventListener("change", saveOptions);
       });
-    let prefs_add_tags = await browser.storage.sync.get({ add_tags_enabled_accounts: [], connection_type: 'chatgpt_web' });
+    let prefs_add_tags = await getSecureSettings({ add_tags_enabled_accounts: [], connection_type: 'chatgpt_web' });
 
     let addtags_textarea = document.getElementById('addtags_prompt_text');
     let addtags_save_btn = document.getElementById('btn_save_prompt');
@@ -251,10 +252,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
       if (selectedAccounts.length === document.querySelectorAll('.accountCheckbox').length) {
-        browser.storage.sync.set({ add_tags_enabled_accounts: [] });
+        setSecureSettings({ add_tags_enabled_accounts: [] });
         taLog.log("All accounts selected, saving add_tags_enabled_accounts = [].");
       } else {
-        browser.storage.sync.set({ add_tags_enabled_accounts: selectedAccounts });
+        setSecureSettings({ add_tags_enabled_accounts: selectedAccounts });
         taLog.log("Saving add_tags_enabled_accounts = " + JSON.stringify(selectedAccounts) + ".");
       }
       });
@@ -273,7 +274,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
 async function updateAdditionalPromptStatements(){
-    let prefs_ = await browser.storage.sync.get({
+    let prefs_ = await getSecureSettings({
       add_tags_maxnum: prefs_default.add_tags_maxnum,
       add_tags_force_lang: prefs_default.add_tags_force_lang,
       default_chatgpt_lang: prefs_default.default_chatgpt_lang,
@@ -361,7 +362,7 @@ function saveOptions(e) {
         console.error("[ThunderAI] Unhandled input type:", element.type);
     }
 
-  browser.storage.sync.set(options);
+  setSecureSettings(options);
 }
 
 async function restoreOptions() {
@@ -420,7 +421,7 @@ async function restoreOptions() {
     });
   }
 
-  let getting = await browser.storage.sync.get(prefs_default);
+  let getting = await getSecureSettings(prefs_default);
 
   let specialPrompts = await getSpecialPrompts();
   let addtags_prompt = specialPrompts.find(prompt => prompt.id === 'prompt_add_tags');

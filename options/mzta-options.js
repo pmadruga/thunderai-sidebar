@@ -1,3 +1,4 @@
+import { HISTORY_DEFAULTS } from '../js/mzta-chathistory.js';
 /*
  *  ThunderAI [https://micz.it/thunderbird-addon-thunderai/]
  *  Copyright (C) 2024 - 2026  Mic (m@micz.it)
@@ -16,6 +17,7 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+import { getSecureSettings, setSecureSettings, isSecretSetting } from '../js/secure-settings.js';
 import {
   prefs_default,
   getDynamicSettingsDefaults,
@@ -49,50 +51,54 @@ import {
   runConnectionTest
 } from '../js/mzta-connection-test.js';
 
-let taLog = new taLogger("mzta-options",true);
+let taLog = new taLogger("mzta-options",false);
 
-function saveOptions(e) {
+async function saveOptions(e) {
   e.preventDefault();
   let options = {};
   let element = e.target;
 
+
     switch (element.type) {
       case 'checkbox':
         options[element.id] = element.checked;
-        taLog.log('Saving option: ' + element.id + ' = ' + element.checked);
+        taLog.log('Saved option: ' + element.id);
         break;
       case 'number':
         options[element.id] = element.valueAsNumber;
-        taLog.log('Saving option: ' + element.id + ' = ' + element.valueAsNumber);
+        taLog.log('Saved option: ' + element.id);
         break;
       case 'text':
         options[element.id] = element.value.trim();
-        taLog.log('Saving option: ' + element.id + ' = ' + element.value);
+        taLog.log('Saved option: ' + element.id);
         break;
       case 'password':
         options[element.id] = element.value.trim();
-        taLog.log('Saving option: ' + element.id + ' = *********');
+        taLog.log('Saved option: ' + element.id);
         break;
       case 'select-one':
         options[element.id] = element.value;
-        taLog.log('Saving option: ' + element.id + ' = ' + element.value);
+        taLog.log('Saved option: ' + element.id);
         break;
       case 'textarea':
         options[element.id] = element.value.trim();
-        taLog.log('Saving option: ' + element.id + ' = ' + element.value.trim());
+        taLog.log('Saved option: ' + element.id);
         break;
       default:
           console.error("[ThunderAI] Unhandled input type:", element.type);
     }
 
-  browser.storage.sync.set(options);
+  try { await setSecureSettings(options); }
+  catch (_) {
+    window.alert(browser.i18n.getMessage('secure_settings_save_error') || 'Settings could not be saved securely. No plaintext credential fallback was used.');
+  }
 }
 
 async function restoreOptions() {
   function setCurrentChoice(result) {
     document.querySelectorAll(".option-input").forEach(element => {
       if(!element.id) return;
-      taLog.log("Options restoring " + element.id + " = " + (isAPIKeyValue(element.id) ? "****************" : result[element.id]));
+      taLog.log("Options restoring " + element.id + " = " + (isSecretSetting(element.id) ? "****************" : result[element.id]));
       switch (element.type) {
         case 'checkbox':
           element.checked = result[element.id] || false;
@@ -139,7 +145,7 @@ async function restoreOptions() {
     });
   }
 
-  let getting = await browser.storage.sync.get(prefs_default);
+  let getting = await getSecureSettings(prefs_default);
   setCurrentChoice(getting);
 }
 
@@ -196,15 +202,6 @@ function updateSpecificApiIndicators(prefs_opt) {
       indicator.style.display = 'none';
     }
   }
-}
-
-function disable_MaxPromptLength(){
-  let maxPromptLength = document.getElementById('max_prompt_length');
-  let conntype_select = document.getElementById("connection_type");
-  // API-only setting: irrelevant for ChatGPT Web and until a connection is chosen.
-  maxPromptLength.disabled = (conntype_select.value === "chatgpt_web") || hasNoConnectionSelected(conntype_select.value);
-  let maxPromptLength_tr = document.getElementById('max_prompt_length_tr');
-  maxPromptLength_tr.style.display = (maxPromptLength.disabled) ? 'none' : '';
 }
 
 // Show the "Manage settings" link for a feature only when its flag is enabled;
@@ -273,7 +270,7 @@ function disable_ApiFeature(prefs_opt, prefix, manageBtnId){
   setApiWarnVisibility(prefix, state.show_api_warning);
 
   if(checked_original != checkbox.checked){
-    browser.storage.sync.set({[prefix]: checkbox.checked});
+    setSecureSettings({[prefix]: checkbox.checked});
   }
 }
 
@@ -522,16 +519,10 @@ function setConnTestState(state, message){
   }
 }
 
-function resetMaxPromptLength(){
-  let maxPromptLength = document.getElementById('max_prompt_length');
-  maxPromptLength.value = prefs_default.max_prompt_length;
-  browser.storage.sync.set({max_prompt_length: prefs_default.max_prompt_length});
-}
-
 function resetSpecialCommandTimeout(){
   let specialCommandTimeout = document.getElementById('special_command_timeout');
   specialCommandTimeout.value = prefs_default.special_command_timeout;
-  browser.storage.sync.set({special_command_timeout: prefs_default.special_command_timeout});
+  setSecureSettings({special_command_timeout: prefs_default.special_command_timeout});
 }
 
 async function updateCacheSize() {
@@ -539,7 +530,56 @@ async function updateCacheSize() {
   document.getElementById('cache_storage_size').textContent = size;
 }  
 
+// These settings are deliberately local and excluded from the synced options form.
+async function initializeChatHistorySettings() {
+  const days = document.getElementById('chat_history_retention_days');
+  const budget = document.getElementById('chat_history_max_mb');
+  const clear = document.getElementById('btnClearAllChats');
+  const status = document.getElementById('chat_history_settings_status');
+  const controls = [days, budget, clear];
+  let saved = await browser.storage.local.get(HISTORY_DEFAULTS);
+  function restore() {
+    days.value = saved.chat_history_retention_days;
+    budget.value = saved.chat_history_max_mb;
+  }
+  restore();
+  async function apply(event) {
+    const isClear = event.target === clear;
+    if (!isClear && (!days.checkValidity() || !budget.checkValidity())) {
+      event.target.reportValidity();
+      return;
+    }
+    const next = { chat_history_retention_days: days.valueAsNumber, chat_history_max_mb: budget.valueAsNumber };
+    const disabling = !isClear && next.chat_history_retention_days === 0 && saved.chat_history_retention_days !== 0;
+    if ((isClear || disabling) && !window.confirm(browser.i18n.getMessage(disabling ? 'chat_history_disable_confirm' : 'chat_history_clear_all_confirm'))) {
+      restore();
+      return;
+    }
+    controls.forEach(control => { control.disabled = true; });
+    status.textContent = '';
+    try {
+      if (!isClear) {
+        await browser.storage.local.set(next);
+        saved = next;
+      }
+      await browser.runtime.sendMessage({ command: 'email_chat_history', operation: isClear || next.chat_history_retention_days === 0 ? 'deleteAll' : 'prune' });
+      status.textContent = browser.i18n.getMessage(isClear ? 'chat_history_all_cleared' : next.chat_history_retention_days === 0 ? 'chat_history_saving_disabled' : 'chat_history_settings_saved');
+    } catch (_) {
+      // Keep the saved preference visible even if pruning failed, so the user
+      // can retry without implying that deletion completed successfully.
+      restore();
+      status.textContent = browser.i18n.getMessage('chat_history_settings_error');
+    } finally {
+      controls.forEach(control => { control.disabled = false; });
+    }
+  }
+  days.addEventListener('change', apply);
+  budget.addEventListener('change', apply);
+  clear.addEventListener('click', apply);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+  await initializeChatHistorySettings();
   await injectConnectionUI({
     afterTrId: 'connection_ui_anchor',
     selectId: 'connection_type',
@@ -590,7 +630,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!granted) {
           event.target.checked = false;
           setFeatureManageVisibility(addtags_info_btn, false);
-          browser.storage.sync.set({add_tags: false});
+          setSecureSettings({add_tags: false});
         }
       }
     }
@@ -608,7 +648,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!granted) {
           event.target.checked = false;
           setFeatureManageVisibility(spamfilter_info_btn, false);
-          browser.storage.sync.set({spamfilter: false});
+          setSecureSettings({spamfilter: false});
         }
       }
     }
@@ -689,12 +729,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  let prefs_opt = await browser.storage.sync.get({
+  let prefs_opt = await getSecureSettings({
     ...getDynamicSettingsDefaults(['use_specific_integration', 'connection_type'])
   });
 
   let conntype_select = document.getElementById("connection_type");
-  conntype_select.addEventListener("change", disable_MaxPromptLength);
   conntype_select.addEventListener("change", () => disable_AddTags(prefs_opt));
   conntype_select.addEventListener("change", () => disable_SpamFilter(prefs_opt));
   conntype_select.addEventListener("change", () => disable_Summarize(prefs_opt));
@@ -710,7 +749,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateDescription();
   updateConnPanelTint();
   updateShortcutChips();
-  disable_MaxPromptLength();
   disable_AddTags(prefs_opt);
   disable_SpamFilter(prefs_opt);
   disable_Summarize(prefs_opt);
@@ -724,7 +762,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       key.endsWith('_use_specific_integration') || key.endsWith('_connection_type')
     );
     if (hasRelevantChange) {
-      prefs_opt = await browser.storage.sync.get({
+      prefs_opt = await getSecureSettings({
         ...getDynamicSettingsDefaults(['use_specific_integration', 'connection_type'])
       });
       updateSpecificApiIndicators(prefs_opt);
@@ -740,7 +778,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  document.getElementById('reset_max_prompt_length').addEventListener('click', resetMaxPromptLength);
   document.getElementById('reset_special_command_timeout').addEventListener('click', resetSpecialCommandTimeout);
 
   // App-level "Advanced options" disclosure (purely UI, no pref persisted)

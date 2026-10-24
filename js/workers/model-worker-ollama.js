@@ -21,149 +21,57 @@
  */
 
 import { Ollama } from '../api/ollama.js';
-import { taLogger } from '../mzta-logger.js';
-
-let ollama = null;
-let stopStreaming = false;
-let i18nStrings = null;
-let do_debug = false;
-let taLog = null;
+import { ChatSession } from './chat-session.js';
+import { configureEndpointPolicy } from '../endpoint-policy.js';
 
 let conversationHistory = [];
-let assistantResponseAccumulator = '';
-let thinkingAccumulator = '';
+let previous_response_id = null;
+let client = null;
+let session = null;
+let tools = null;
+let strings = {};
+let contextSize = null;
 
 self.onmessage = async function(event) {
-    switch (event.data.type) {
-        case 'init':
-            let config = { stream: true };
-            for (const key in event.data) {
-                if (key.startsWith('ollama_')) {
-                    let newKey = key.replace('ollama_', '');
-                    config[newKey] = event.data[key];
-                }
+    const data = event.data;
+    if (data.type === 'restoreHistory') {
+        session?.stop();
+        conversationHistory = Array.isArray(data.history) ? data.history : [];
+        previous_response_id = null;
+        if (session) { session.history = conversationHistory; session.resetResponseId(); }
+        return;
+    }
+    if (data.type === 'stop') { session?.stop(); return; }
+    try {
+        if (data.type === 'init') {
+            configureEndpointPolicy(data.allowed_http_origins || []);
+            const config = { stream: true };
+            for (const key in data) {
+                if (!key.startsWith('ollama_') || key.startsWith('chatgpt_web_')) continue;
+                let name = key.slice('ollama_'.length);
+                if (name === 'api_key') name = 'apiKey';
+                config[name] = data[key];
             }
-            ollama = new Ollama(config);
-            do_debug = event.data.do_debug;
-            i18nStrings = event.data.i18nStrings;
-            taLog = new taLogger('model-worker-ollama', do_debug);
-            break;  // init
-        case 'chatMessage':
-            conversationHistory.push({ role: 'user', content: event.data.message });
-            //console.log(">>>>>>>>>>> conversationHistory: " + JSON.stringify(conversationHistory));
-            const response = await ollama.fetchResponse(conversationHistory); //4096);
-            postMessage({ type: 'messageSent' });
-
-            if (!response.ok) {
-                let error_message = '';
-                let errorDetail = '';
-                let error_text = '';
-                if(response.is_exception === true){
-                    error_message = response.error;
-                    // Network-level failure: no status/statusText exist on the returned object,
-                    // and error_message already carries the provider name.
-                    error_text = error_message;
-                }else{
-                    try{
-                        const errorJSON = await response.json();
-                        errorDetail = JSON.stringify(errorJSON);
-                        error_message = errorJSON.error.message;
-                    }catch(e){
-                        error_message = response.statusText;
-                    }
-                    taLog.log("error_message: " + JSON.stringify(error_message));
-                    error_text = i18nStrings["ollama_api_request_failed"] + ": " + response.status + " " + response.statusText + ", Detail: " + error_message + (errorDetail ? " " + errorDetail : "");
-                }
-                postMessage({ type: 'error', payload: error_text });
-                throw new Error("[ThunderAI] Ollama API request failed: " + error_text);
-            }
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder("utf-8");
-            let buffer= '';
-    
-            try {
-                while (true) {
-                    if (stopStreaming) {
-                        stopStreaming = false;
-                        reader.cancel();
-                        taLog.log("AI full reasoning [STOPPED]: " + thinkingAccumulator);
-                        taLog.log("AI full response [STOPPED]: " + assistantResponseAccumulator);
-                        conversationHistory.push({ role: 'assistant', content: assistantResponseAccumulator });
-                        assistantResponseAccumulator = '';
-                        postMessage({ type: 'tokensDone', payload: { thinking: thinkingAccumulator } });
-                        thinkingAccumulator = '';
-
-                        break;
-                    }
-                    const { done, value } = await reader.read();
-                    if (done) {
-                        taLog.log("AI full reasoning: " + thinkingAccumulator);
-                        taLog.log("AI full response: " + assistantResponseAccumulator);
-                        conversationHistory.push({ role: 'assistant', content: assistantResponseAccumulator });
-                        assistantResponseAccumulator = '';
-                        postMessage({ type: 'tokensDone', payload: { thinking: thinkingAccumulator } });
-                        thinkingAccumulator = '';
-                        break;
-                    }
-                    // lots of low-level Ollama response parsing stuff
-                    const chunk = decoder.decode(value);
-                    buffer += chunk;
-                    // No per-chunk dump of `buffer`: taLog.log() only gates the console
-                    // call, so the whole unconsumed buffer would be re-concatenated on
-                    // every chunk even with debug off. The per-line log below covers it.
-                    const lines = buffer.split("\n");
-                    buffer = lines.pop();
-                    let parsedLines = [];
-                    try{
-                        parsedLines = lines
-                            .map((line) => line.replace(/^chunk: /, "").trim()) // Remove the "chunk: " prefix
-                            .filter((line) => line !== "" && line !== "[DONE]") // Remove empty lines and "[DONE]"
-                            // .map((line) => JSON.parse(line)); // Parse the JSON string
-                            .map((line) => {
-                                try {
-                                    // Guarded at the call site: taLog.log() gates only the
-                                    // console call, so an unguarded JSON.stringify() would run
-                                    // per line even with debug off.
-                                    if (taLog.do_debug) taLog.log("line: " + JSON.stringify(line));
-                                    return JSON.parse(line);
-                                } catch (e) {
-                                    taLog.warn("JSON parse warning, skipped line: " + line + " - " + e.message);
-                                    return null;
-                                }
-                            })
-                            .filter((parsed) => parsed !== null);
-                    }catch(e){
-                        taLog.error("Error parsing lines: " + e);
-                    }
-            
-                    for (const parsedLine of parsedLines) {
-                        const { message } = parsedLine;
-                        const { content, thinking } = message;
-                        // Update the UI with the new thinking content
-                        if (thinking) {
-                            thinkingAccumulator += thinking;
-                            postMessage({ type: 'newThinkingToken', payload: { token: thinking } });
-                        }
-                        // Update the UI with the new content
-                        if (content) {
-                            assistantResponseAccumulator += content;
-                            postMessage({ type: 'newToken', payload: { token: content } });
-                        }
-                    }
-                }
-            } catch (error) {
-                if (error instanceof TypeError && error.message.includes('Error in input stream')) {
-                    console.error('[ThudenderAI] The connection to the server was unexpectedly interrupted:', error);
-                    postMessage({ type: 'error', payload: i18nStrings['error_connection_interrupted'] + ": " + error.message });
-                } else {
-                    console.error('[ThudenderAI] Ollama API request failed:', error);
-                    postMessage({ type: 'error', payload: i18nStrings["ollama_api_request_failed"] + ": " + error.message });
-                }
-            }
-            break; //chatMessage
-        case 'stop':
-            stopStreaming = true;
-            break; //stop
-     }
+            client = new Ollama(config);
+            strings = data.i18nStrings || {};
+            previous_response_id = null;
+            if (session) { session.client = client; session.strings = strings; session.resetResponseId(); }
+        } else if (data.type === 'setTools') {
+            tools = Array.isArray(data.tools) && data.tools.length ? data.tools : null;
+            if (session) session.tools = tools;
+        } else if (data.type === 'chatMessage' || data.type === 'toolResults') {
+            if (!client) throw new Error('AI provider is not configured');
+            if (!session) session = new ChatSession({
+                provider: 'ollama', client, history: conversationHistory, strings,
+                emit: message => postMessage(message),
+                onResponseId: id => { previous_response_id = id; },
+            });
+            session.tools = tools;
+            session.contextSize = contextSize;
+            if (data.type === 'chatMessage') await session.send(data.message);
+            else await session.toolResults(data.results, data.requestId);
+        }
+    } catch (error) {
+        postMessage({ type: 'error', payload: 'AI request failed: ' + (error?.message || 'Unknown error'), history: conversationHistory });
+    }
 };

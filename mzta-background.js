@@ -1,3 +1,4 @@
+import { configureSecureSettingsBackground, migrateSecureSettings, migrateSensitiveLocalData, secureSettingsOperation, secureLocalDataOperation, getSecureSettings, setSecureSettings } from './js/secure-settings.js';
 /*
  *  ThunderAI [https://micz.it/thunderbird-addon-thunderai/]
  *  Copyright (C) 2024 - 2026  Mic (m@micz.it)
@@ -16,6 +17,8 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+import { ChatSelectionState } from './js/mzta-selection-state.js';
+import { chatHistoryOperation, emailThreadKey } from './js/mzta-chathistory.js';
 import { mzta_script } from './js/mzta-chatgpt.js';
 import {
     prefs_default,
@@ -79,6 +82,23 @@ import {
     addTags_getExclusionList,
     checkExcludedTag
 } from './js/mzta-addtags-exclusion-list.js';
+
+const chatSelections = new ChatSelectionState();
+configureSecureSettingsBackground();
+browser.runtime.onMessage.addListener((message, sender) => {
+    if (!['secure_settings', 'secure_local_data'].includes(message?.command)) return;
+    if (sender.id !== browser.runtime.id || !sender.url?.startsWith(browser.runtime.getURL(''))) {
+        return Promise.reject(new Error('Secure settings are only available to extension pages'));
+    }
+    return message.command === 'secure_settings' ? secureSettingsOperation(message) : secureLocalDataOperation(message);
+});
+try {
+    await migrateSecureSettings();
+    await migrateSensitiveLocalData();
+    await chatHistoryOperation(null, 'prune');
+} catch (_) {
+    console.error('[ThunderAI] Encrypted storage is unavailable. Unlock the system key store and reopen the extension. Existing data has not been replaced.');
+}
 
 browser.runtime.onInstalled.addListener(({ reason, previousVersion }) => {
     // console.log(">>>>>>>>>>> onInstalled: " + JSON.stringify(reason) + ", previousVersion: " + previousVersion);
@@ -238,7 +258,7 @@ export function preparePopupMenu(tab) {
 // flags lag behind the rest by one or more storage change events, hiding a command
 // until restart.
 async function _readFeatureConnPrefs() {
-    return await browser.storage.sync.get({
+    return await getSecureSettings({
         add_tags: prefs_default.add_tags,
         get_calendar_event: prefs_default.get_calendar_event,
         get_calendar_event_from_clipboard: prefs_default.get_calendar_event_from_clipboard,
@@ -296,7 +316,7 @@ async function _reconcileFeatureFlags(prefs) {
     if (Object.keys(to_disable).length > 0) {
         // console.log and not taLog: this also runs at startup, before taLog is built.
         console.log("[ThunderAI] Disabling features with an unusable connection: " + Object.keys(to_disable).join(', '));
-        await browser.storage.sync.set(to_disable);
+        await setSecureSettings(to_disable);
     }
     return prefs;
 }
@@ -369,12 +389,20 @@ messenger.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // handler function.
     if (message && message.hasOwnProperty("command")){
         switch (message.command) {
+            case 'email_chat_history':
+                const sourcePage = sender.url?.split('?')[0];
+                const chatPage = sourcePage === browser.runtime.getURL('api_webchat/index.html');
+                const maintenancePage = sourcePage === browser.runtime.getURL('options/mzta-options.html') && ['prune', 'deleteAll'].includes(message.operation);
+                if (sender.id !== browser.runtime.id || (!chatPage && !maintenancePage)) {
+                    return Promise.reject(new Error('Chat history is only available to authorized extension pages'));
+                }
+                return chatHistoryOperation(message.key, message.operation, message.value);
             case 'initSummary':
                 async function _initSummary() {
                     try {
                         let tabId = sender.tab.id;
 
-                        let prefs = await browser.storage.sync.get({ summarize: prefs_default.summarize, summarize_auto: prefs_default.summarize_auto, summarize_display_mode: prefs_default.summarize_display_mode, summarize_max_display_length: prefs_default.summarize_max_display_length, summarize_strip_formatting: prefs_default.summarize_strip_formatting, summarize_auto_senders: prefs_default.summarize_auto_senders, summarize_auto_senders_list: prefs_default.summarize_auto_senders_list, connection_type: prefs_default.connection_type, ...getDynamicSettingsDefaults(['use_specific_integration', 'connection_type']) });
+                        let prefs = await getSecureSettings({ summarize: prefs_default.summarize, summarize_auto: prefs_default.summarize_auto, summarize_display_mode: prefs_default.summarize_display_mode, summarize_max_display_length: prefs_default.summarize_max_display_length, summarize_strip_formatting: prefs_default.summarize_strip_formatting, summarize_auto_senders: prefs_default.summarize_auto_senders, summarize_auto_senders_list: prefs_default.summarize_auto_senders_list, connection_type: prefs_default.connection_type, ...getDynamicSettingsDefaults(['use_specific_integration', 'connection_type']) });
 
                         if (!prefs.summarize) return;
 
@@ -482,7 +510,7 @@ messenger.runtime.onMessage.addListener((message, sender, sendResponse) => {
             case 'refreshSummary':
                 async function _refreshSummary(message) {
                     let tabId = sender.tab.id;
-                    let prefs_refresh = await browser.storage.sync.get({ summarize_display_mode: prefs_default.summarize_display_mode });
+                    let prefs_refresh = await getSecureSettings({ summarize_display_mode: prefs_default.summarize_display_mode });
                     if (prefs_refresh.summarize_display_mode === 'webchat') {
                         await summaryStore.removeSummary(message.headerMessageId);
                         // Resolves via the tabId route (c) — see triggerSummaryWebchat.
@@ -512,7 +540,7 @@ messenger.runtime.onMessage.addListener((message, sender, sendResponse) => {
                             headerMessageId: msg.headerMessageId
                         };
                         await summaryStore.saveSummary(summaryData, msg.headerMessageId);
-                        let prefs_summary = await browser.storage.sync.get({
+                        let prefs_summary = await getSecureSettings({
                             summarize_max_display_length: prefs_default.summarize_max_display_length,
                             summarize_strip_formatting: prefs_default.summarize_strip_formatting
                         });
@@ -533,7 +561,7 @@ messenger.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 async function _initTranslation() {
                     try {
                         let tabId = sender.tab.id;
-                        let prefs = await browser.storage.sync.get({ translate: prefs_default.translate, translate_auto: prefs_default.translate_auto, translate_max_display_length: prefs_default.translate_max_display_length, connection_type: prefs_default.connection_type, ...getDynamicSettingsDefaults(['use_specific_integration', 'connection_type']) });
+                        let prefs = await getSecureSettings({ translate: prefs_default.translate, translate_auto: prefs_default.translate_auto, translate_max_display_length: prefs_default.translate_max_display_length, connection_type: prefs_default.connection_type, ...getDynamicSettingsDefaults(['use_specific_integration', 'connection_type']) });
 
                         if (!prefs.translate) return;
 
@@ -594,7 +622,7 @@ messenger.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     let tabId = sender.tab.id;
                     // Fire the inline loading indicator immediately, before any await
                     browser.tabs.sendMessage(tabId, { command: "showTranslationGenerating" });
-                    let prefs_tl = await browser.storage.sync.get({
+                    let prefs_tl = await getSecureSettings({
                         translate_lang: prefs_default.translate_lang,
                         default_chatgpt_lang: prefs_default.default_chatgpt_lang
                     });
@@ -624,8 +652,11 @@ messenger.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 break;
             case 'chatgpt_close':
                     if (message.panel) {
-                        _emailChatKey = null;
-                        return browser.chatPanel.close();
+                        if (message.window_id !== undefined) {
+                            chatSelections.begin(message.window_id);
+                            chatSelections.state(message.window_id).key = null;
+                        }
+                        return browser.chatPanel.close(message.window_id);
                     }
                     async function _closeChatGptWindow(window_id) {
                         // Safety: inside the side panel, windows.getCurrent() is the main
@@ -639,11 +670,11 @@ messenger.runtime.onMessage.addListener((message, sender, sendResponse) => {
                             taLog.error("Error checking AI chat window: " + e);
                             return;
                         }
-                        let prefs_close = await browser.storage.sync.get({chatgpt_win_save_position: prefs_default.chatgpt_win_save_position});
+                        let prefs_close = await getSecureSettings({chatgpt_win_save_position: prefs_default.chatgpt_win_save_position});
                         if(prefs_close.chatgpt_win_save_position){
                             try {
                                 let winInfo = await browser.windows.get(window_id);
-                                await browser.storage.sync.set({chatgpt_win_top: winInfo.top, chatgpt_win_left: winInfo.left});
+                                await setSecureSettings({chatgpt_win_top: winInfo.top, chatgpt_win_left: winInfo.left});
                                 taLog.log("Window position saved: top=" + winInfo.top + ", left=" + winInfo.left);
                             } catch(e) {
                                 taLog.error("Error saving window position: " + e);
@@ -677,7 +708,7 @@ messenger.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     let paragraphsHtmlString = message.text;
                     //console.log(">>>>>>>>>>>> paragraphsHtmlString: " + paragraphsHtmlString);
                     taLog.log("paragraphsHtmlString: " + paragraphsHtmlString);
-                    let prefs_reply = await browser.storage.sync.get({reply_type: prefs_default.reply_type});
+                    let prefs_reply = await getSecureSettings({reply_type: prefs_default.reply_type});
                     // No plain-text conversion here: the reply window does not exist
                     // yet, so its format is not knowable. replaceBody() reads it from
                     // the created tab and converts there.
@@ -798,7 +829,7 @@ messenger.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 break;
             case 'assign_tags':
                 async function _do_assign_tags(message) {
-                    let prefs_assign_tags = await browser.storage.sync.get({add_tags_exclusions_exact_match: prefs_default.add_tags_exclusions_exact_match});
+                    let prefs_assign_tags = await getSecureSettings({add_tags_exclusions_exact_match: prefs_default.add_tags_exclusions_exact_match});
                     return _assign_tags(message,true, prefs_assign_tags.add_tags_exclusions_exact_match);
                 }
                 return _do_assign_tags(message);
@@ -945,7 +976,7 @@ async function _resolveMessage(headerMessageId, messageId = null, tabId = null, 
 // message the user never asked to summarize.
 async function _summarizeConnectionMissing() {
     try {
-        let prefs = await browser.storage.sync.get({
+        let prefs = await getSecureSettings({
             connection_type: prefs_default.connection_type,
             ...getDynamicSettingsDefaults(['use_specific_integration', 'connection_type'])
         });
@@ -964,7 +995,7 @@ async function _summarizeConnectionMissing() {
 //   getDisplayedMessage) — the cheapest route, used by the auto-display paths. See _resolveMessage()
 async function _generateSummaryForMessage(headerMessageId, tabId = null, options = {}) {
     try {
-        let prefs = await browser.storage.sync.get({
+        let prefs = await getSecureSettings({
             connection_type: prefs_default.connection_type,
             do_debug: prefs_default.do_debug,
             default_chatgpt_lang: prefs_default.default_chatgpt_lang,
@@ -1069,7 +1100,7 @@ async function _generateSummaryForMessage(headerMessageId, tabId = null, options
 //   getDisplayedMessage) — the cheapest route, used by the auto-display paths. See _resolveMessage()
 async function _generateTranslationForMessage(headerMessageId, tabId = null, options = {}) {
     try {
-        let prefs = await browser.storage.sync.get({
+        let prefs = await getSecureSettings({
             connection_type: prefs_default.connection_type,
             do_debug: prefs_default.do_debug,
             default_chatgpt_lang: prefs_default.default_chatgpt_lang,
@@ -1215,7 +1246,7 @@ async function _generateSpamReportForMessage(headerMessageId, options = {}) {
     // metadata was captured before the failure.
     let message_metadata = null;
     try {
-        let prefs = options.prefs || await browser.storage.sync.get({
+        let prefs = options.prefs || await getSecureSettings({
             connection_type: prefs_default.connection_type,
             do_debug: prefs_default.do_debug,
             default_chatgpt_lang: prefs_default.default_chatgpt_lang,
@@ -1269,7 +1300,7 @@ async function _generateSpamReportForMessage(headerMessageId, options = {}) {
         // hasAddressListEntries() is used instead of a plain length check because a list saved
         // by a previous version can still hold a stray '' (an emptied textarea was stored as
         // ['']), which would read as a configured list.
-        let skip_addresses = options.skip_addresses || (await browser.storage.sync.get({spamfilter_skip_addresses: prefs_default.spamfilter_skip_addresses})).spamfilter_skip_addresses;
+        let skip_addresses = options.skip_addresses || (await getSecureSettings({spamfilter_skip_addresses: prefs_default.spamfilter_skip_addresses})).spamfilter_skip_addresses;
         if (hasAddressListEntries(skip_addresses)) {
             if (senderEmail && skip_addresses.includes(senderEmail)) {
                 taLog.log("Sender " + senderEmail + " is in the skip addresses list, skipping spam filter.");
@@ -1292,7 +1323,7 @@ async function _generateSpamReportForMessage(headerMessageId, options = {}) {
         // Check if sender is in any address book
         let skip_addressbook = options.skip_addressbook !== undefined
             ? options.skip_addressbook
-            : (await browser.storage.sync.get({spamfilter_skip_addressbook: prefs_default.spamfilter_skip_addressbook})).spamfilter_skip_addressbook;
+            : (await getSecureSettings({spamfilter_skip_addressbook: prefs_default.spamfilter_skip_addressbook})).spamfilter_skip_addressbook;
         if (skip_addressbook && senderEmail) {
             try {
                 let hasPermission = await browser.permissions.contains({ permissions: ["addressBooks"] });
@@ -1436,7 +1467,7 @@ async function _openSummaryWebchat(headerMessageId, tabId, messageId = null) {
         const curr_message_full = await browser.messages.getFull(curr_message.id);
 
         const summarize_prompt = await getSummarizePrompt();
-        const connectionType = getConnectionType(await browser.storage.sync.get(prefs_default), summarize_prompt, 'summarize');
+        const connectionType = getConnectionType(await getSecureSettings(prefs_default), summarize_prompt, 'summarize');
         // Not just chatgpt_web: an empty connection is equally unusable.
         if (!isApiUsableConnection(connectionType)) {
             const errorMsg = browser.i18n.getMessage('summarize_chatgpt_web_not_supported');
@@ -1465,20 +1496,25 @@ browser.runtime.onMessageExternal.addListener((message, sender, sendResponse) =>
 });
 
 async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_custom_text = 0, prompt_info = {}) {
-    let prefs = await browser.storage.sync.get(prefs_default);
+    let prefs;
+    try { prefs = await getSecureSettings(prefs_default); }
+    catch (_) {
+        await showGenericError(browser.i18n.getMessage('secure_settings_unavailable'));
+        return;
+    }
     taLog.changeDebug(prefs.do_debug);
     prefs = checkScreenDimensions(prefs);
     //console.log(">>>>>>>>>>>>>>>> prefs: " + JSON.stringify(prefs));
     // console.log(">>>>>>>>>>>>>>>> prompt_info: " + JSON.stringify(prompt_info));
 
     prefs.connection_type = getConnectionType(prefs, prompt_info);
+    if (prompt_info.chat_selection && !chatSelections.current(prompt_info.chat_selection)) return;
 
     taLog.log("Prompt length: " + promptText.length);
-    let _max_prompt_length = prefs.max_prompt_length;
-    if(prefs.connection_type == 'chatgpt_web'){
-        _max_prompt_length = prefs_default.max_prompt_length;
-    }
-    if((_max_prompt_length > 0) && (promptText.length > _max_prompt_length)){
+    // API providers enforce the selected model's token context window against
+    // the complete request. A character count cannot represent that limit.
+    // Keep the existing guard only for browser-based ChatGPT automation.
+    if (prefs.connection_type === 'chatgpt_web' && promptText.length > prefs_default.max_prompt_length) {
         // Prompt too long
         let tabs = await browser.tabs.query({ active: true, currentWindow: true });
         browser.tabs.sendMessage(curr_tabId, { command: "sendAlert", curr_tab_type: tabs[0].type, message: browser.i18n.getMessage('msg_prompt_too_long') });
@@ -1559,7 +1595,7 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
                     if((originalText == null) || (originalText == "")) {
                         originalText = prompt_info.body_text;
                     }
-                    let reply_type_pref = await browser.storage.sync.get({ reply_type: prefs_default.reply_type });
+                    let reply_type_pref = await getSecureSettings({ reply_type: prefs_default.reply_type });
                     //console.log(">>>>>>>>>> prompt_info: " + JSON.stringify(prompt_info));
                     let pre_script = `let mztaWinId = `+ createdTab.windowId +`;
                     let mztaStatusPageDesc="`+ browser.i18n.getMessage("prefs_status_page") +`";
@@ -1616,15 +1652,15 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
 
                     // check if the config is present, or give a message error
                     if (prefs.chatgpt_api_key == '') {
-                        sendToChat(createdTab, { command: "api_error", error: browser.i18n.getMessage('chatgpt_empty_apikey')});
+                        sendToChat(createdTab, { call_id: rand_call_id2, command: "api_error", error: browser.i18n.getMessage('chatgpt_empty_apikey')});
                         return;
                     }
                     if (prefs.chatgpt_model == '') {
-                        sendToChat(createdTab, { command: "api_error", error: browser.i18n.getMessage('chatgpt_empty_model')});
+                        sendToChat(createdTab, { call_id: rand_call_id2, command: "api_error", error: browser.i18n.getMessage('chatgpt_empty_model')});
                         return;
                     }
                     //console.log(">>>>>>>>>> sender: " + JSON.stringify(sender));
-                    sendToChat(createdTab, { command: (prompt_info?.chat_mode ? "api_context" : "api_send"), prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId2, do_custom_text: do_custom_text, prompt_info: prompt_info});
+                    sendToChat(createdTab, { call_id: rand_call_id2, command: (prompt_info?.chat_mode ? "api_context" : "api_send"), prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId2, do_custom_text: do_custom_text, prompt_info: prompt_info});
                     taLog.log('[OpenAI ChatGPT] Connection succeded!');
                     browser.runtime.onMessage.removeListener(listener2);
                 }
@@ -1644,7 +1680,8 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
 
             applyWindowPositionAndSize(win_options2, prefs);
 
-            await openChatView(win_options2, curr_tabId);
+            await openChatView(win_options2, curr_tabId, prompt_info.chat_selection);
+            if (prompt_info.chat_selection && !chatSelections.current(prompt_info.chat_selection)) browser.runtime.onMessage.removeListener(listener2);
         }
         break;  // chatgpt_api - END
 
@@ -1662,15 +1699,15 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
 
                     // check if the config is present, or give a message error
                     if (prefs.google_gemini_api_key == '') {
-                        sendToChat(createdTab, { command: "api_error", error: browser.i18n.getMessage('google_gemini_empty_apikey')});
+                        sendToChat(createdTab, { call_id: rand_call_id5, command: "api_error", error: browser.i18n.getMessage('google_gemini_empty_apikey')});
                         return;
                     }
                     if (prefs.google_gemini_model == '') {
-                        sendToChat(createdTab, { command: "api_error", error: browser.i18n.getMessage('google_gemini_empty_model')});
+                        sendToChat(createdTab, { call_id: rand_call_id5, command: "api_error", error: browser.i18n.getMessage('google_gemini_empty_model')});
                         return;
                     }
                     //console.log(">>>>>>>>>> sender: " + JSON.stringify(sender));
-                    sendToChat(createdTab, { command: (prompt_info?.chat_mode ? "api_context" : "api_send"), prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId5, do_custom_text: do_custom_text, prompt_info: prompt_info});
+                    sendToChat(createdTab, { call_id: rand_call_id5, command: (prompt_info?.chat_mode ? "api_context" : "api_send"), prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId5, do_custom_text: do_custom_text, prompt_info: prompt_info});
                     taLog.log('[Google Gemini] Connection succeded!');
                     browser.runtime.onMessage.removeListener(listener5);
                 }
@@ -1690,7 +1727,8 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
 
             applyWindowPositionAndSize(win_options5, prefs);
 
-            await openChatView(win_options5, curr_tabId);
+            await openChatView(win_options5, curr_tabId, prompt_info.chat_selection);
+            if (prompt_info.chat_selection && !chatSelections.current(prompt_info.chat_selection)) browser.runtime.onMessage.removeListener(listener5);
         }
         break;  // google_gemini_api - END
 
@@ -1715,14 +1753,14 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
             
                     // check if the config is present, or give a message error
                     if (prefs.ollama_host == '') {
-                        sendToChat(createdTab3, { command: "api_error", error: browser.i18n.getMessage('ollama_empty_host')});
+                        sendToChat(createdTab3, { call_id: rand_call_id3, command: "api_error", error: browser.i18n.getMessage('ollama_empty_host')});
                         return;
                     }
                     if (prefs.ollama_model == '') {
-                        sendToChat(createdTab3, { command: "api_error", error: browser.i18n.getMessage('ollama_empty_model')});
+                        sendToChat(createdTab3, { call_id: rand_call_id3, command: "api_error", error: browser.i18n.getMessage('ollama_empty_model')});
                         return;
                     }
-                    sendToChat(createdTab3, { command: (prompt_info?.chat_mode ? "api_context" : "api_send"), prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId3, do_custom_text: do_custom_text, prompt_info: prompt_info});
+                    sendToChat(createdTab3, { call_id: rand_call_id3, command: (prompt_info?.chat_mode ? "api_context" : "api_send"), prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId3, do_custom_text: do_custom_text, prompt_info: prompt_info});
                     taLog.log('[Ollama API] Connection succeded!');
                     browser.runtime.onMessage.removeListener(listener3);
                 }
@@ -1743,7 +1781,8 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
 
             applyWindowPositionAndSize(win_options3, prefs);
 
-            await openChatView(win_options3, curr_tabId);
+            await openChatView(win_options3, curr_tabId, prompt_info.chat_selection);
+            if (prompt_info.chat_selection && !chatSelections.current(prompt_info.chat_selection)) browser.runtime.onMessage.removeListener(listener3);
 
         }
         break;  // ollama_api - END
@@ -1763,15 +1802,15 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
     
                     // check if the config is present, or give a message error
                     if (prefs.openai_comp_host == '') {
-                        sendToChat(createdTab, { command: "api_error", error: browser.i18n.getMessage('OpenAIComp_empty_host')});
+                        sendToChat(createdTab, { call_id: rand_call_id4, command: "api_error", error: browser.i18n.getMessage('OpenAIComp_empty_host')});
                         return;
                     }
                     if (prefs.openai_comp_model == '') {
-                        sendToChat(createdTab, { command: "api_error", error: browser.i18n.getMessage('OpenAIComp_empty_model')});
+                        sendToChat(createdTab, { call_id: rand_call_id4, command: "api_error", error: browser.i18n.getMessage('OpenAIComp_empty_model')});
                         return;
                     }
     
-                    sendToChat(createdTab, { command: (prompt_info?.chat_mode ? "api_context" : "api_send"), prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId4, do_custom_text: do_custom_text, prompt_info: prompt_info});
+                    sendToChat(createdTab, { call_id: rand_call_id4, command: (prompt_info?.chat_mode ? "api_context" : "api_send"), prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId4, do_custom_text: do_custom_text, prompt_info: prompt_info});
                     taLog.log('[OpenAI Comp API] Connection succeded!');
                     browser.runtime.onMessage.removeListener(listener4);
                 }
@@ -1791,7 +1830,8 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
 
             applyWindowPositionAndSize(win_options4, prefs);
 
-            await openChatView(win_options4, curr_tabId);
+            await openChatView(win_options4, curr_tabId, prompt_info.chat_selection);
+            if (prompt_info.chat_selection && !chatSelections.current(prompt_info.chat_selection)) browser.runtime.onMessage.removeListener(listener4);
         }
         break;  // openai_comp_api - END
 
@@ -1809,19 +1849,19 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
 
                     // check if the config is present, or give a message error
                     if (prefs.anthropic_api_key == '') {
-                        sendToChat(createdTab, { command: "api_error", error: browser.i18n.getMessage('anthropic_empty_apikey')});
+                        sendToChat(createdTab, { call_id: rand_call_id6, command: "api_error", error: browser.i18n.getMessage('anthropic_empty_apikey')});
                         return;
                     }
                     if (prefs.anthropic_model == '') {
-                        sendToChat(createdTab, { command: "api_error", error: browser.i18n.getMessage('anthropic_empty_model')});
+                        sendToChat(createdTab, { call_id: rand_call_id6, command: "api_error", error: browser.i18n.getMessage('anthropic_empty_model')});
                         return;
                     }
                     if (prefs.anthropic_version == '') {
-                        sendToChat(createdTab, { command: "api_error", error: browser.i18n.getMessage('anthropic_empty_version')});
+                        sendToChat(createdTab, { call_id: rand_call_id6, command: "api_error", error: browser.i18n.getMessage('anthropic_empty_version')});
                         return;
                     }
                     //console.log(">>>>>>>>>> sender: " + JSON.stringify(sender));
-                    sendToChat(createdTab, { command: (prompt_info?.chat_mode ? "api_context" : "api_send"), prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId6, do_custom_text: do_custom_text, prompt_info: prompt_info});
+                    sendToChat(createdTab, { call_id: rand_call_id6, command: (prompt_info?.chat_mode ? "api_context" : "api_send"), prompt: promptText, action: action, tabId: curr_tabId, mailMessageId: mailMessageId6, do_custom_text: do_custom_text, prompt_info: prompt_info});
                     taLog.log('[OpenAI ChatGPT] Connection succeded!');
                     browser.runtime.onMessage.removeListener(listener6);
                 }
@@ -1841,7 +1881,8 @@ async function openChatGPT(promptText, action, curr_tabId, prompt_name = '', do_
 
             applyWindowPositionAndSize(win_options6, prefs);
 
-            await openChatView(win_options6, curr_tabId);
+            await openChatView(win_options6, curr_tabId, prompt_info.chat_selection);
+            if (prompt_info.chat_selection && !chatSelections.current(prompt_info.chat_selection)) browser.runtime.onMessage.removeListener(listener6);
         }
         break;  // anthropic_api - END
 
@@ -1870,25 +1911,22 @@ const CHAT_EMAIL_MAX_MESSAGES = 30;
 
 // Identifies the set of emails the panel is chatting about, so re-selecting an
 // email of the same conversation doesn't restart the chat.
-let _emailChatKey = null;
 
 function emailChatKey(messages) {
     return messages.map(m => m.id).sort((a, b) => a - b).join(',');
 }
 
-// Follow the selection: while the side panel is open, selecting another email
-// switches the chat to that email's conversation. Debounced so arrowing
-// through the list doesn't start a chat for every message on the way.
-let _followTimer = null;
+browser.windows.onRemoved.addListener(id => chatSelections.forget(id));
 browser.messageDisplay.onMessagesDisplayed.addListener((tab, messages) => {
-    clearTimeout(_followTimer);
-    _followTimer = setTimeout(() => followSelection(tab, messages), 450);
+    // Invalidate in-flight reads immediately, not after the debounce expires.
+    const ticket = chatSelections.begin(tab.windowId);
+    chatSelections.state(tab.windowId).timer = setTimeout(() => followSelection(tab, messages, ticket), 450);
 });
 
-async function followSelection(tab, messages) {
+async function followSelection(tab, messages, ticket) {
     try {
-        if (!Array.isArray(messages) || messages.length === 0) return;
-        const prefs_follow = await browser.storage.sync.get({
+        if (!Array.isArray(messages) || messages.length === 0 || !chatSelections.current(ticket)) return;
+        const prefs_follow = await getSecureSettings({
             chat_in_side_panel: prefs_default.chat_in_side_panel,
             chat_follow_selection: prefs_default.chat_follow_selection,
         });
@@ -1899,10 +1937,10 @@ async function followSelection(tab, messages) {
             const thread = await browser.chatPanel.getThreadMessages(messages[0].id);
             if (Array.isArray(thread) && thread.length > 1) set = thread;
         }
-        if (emailChatKey(set) === _emailChatKey) return;   // same conversation
-        await openEmailChat(tab.id, messages);
+        if (!chatSelections.current(ticket) || emailChatKey(set) === chatSelections.state(tab.windowId).key) return;
+        await openEmailChat(tab.id, messages, ticket);
     } catch (e) {
-        taLog.error("[ThunderAI] Follow selection failed: " + e);
+        taLog.error('[ThunderAI] Follow selection failed: ' + e);
     }
 }
 
@@ -1960,11 +1998,13 @@ async function getMessagePlainText(messageId) {
     return '';
 }
 
-async function openEmailChat(tabId, selectedMessages = null) {
+async function openEmailChat(tabId, selectedMessages = null, ticket = null) {
     if (!tabId) {
         const tabs = await browser.tabs.query({ active: true, currentWindow: true });
         tabId = tabs[0]?.id;
     }
+    if (!ticket) ticket = chatSelections.begin((await browser.tabs.get(tabId)).windowId);
+    if (!chatSelections.current(ticket)) return;
     let messages = Array.isArray(selectedMessages) ? [...selectedMessages] : [];
     if (messages.length === 0) try {
         const shown = await browser.messageDisplay.getDisplayedMessages(tabId);
@@ -2003,17 +2043,20 @@ async function openEmailChat(tabId, selectedMessages = null) {
 
     // Oldest first, keeping the most recent ones if the selection is very large.
     messages.sort((a, b) => new Date(a.date) - new Date(b.date));
-    _emailChatKey = emailChatKey(messages);
+    const selectedKey = emailChatKey(messages);
+    const historyKey = await emailThreadKey(messages);
     if (messages.length > CHAT_EMAIL_MAX_MESSAGES) {
         messages = messages.slice(-CHAT_EMAIL_MAX_MESSAGES);
     }
 
     const me = await getMyIdentities(messages);
+    if (!chatSelections.current(ticket)) return;
     const blocks = [];
     // The emails' attachments: named in the context, and handed to the chat
     // page, which reads the supported ones (PDF, .docx, text) as documents.
     const attachments = [];
     for (const [i, msg] of messages.entries()) {
+        if (!chatSelections.current(ticket)) return;
         let body = '';
         try {
             body = await getMessagePlainText(msg.id);
@@ -2046,6 +2089,8 @@ async function openEmailChat(tabId, selectedMessages = null) {
         : '';
     const context = browser.i18n.getMessage('chat_email_context_intro') + (whoAmI ? " " + whoAmI : "") +
         "\n\n" + blocks.join("\n\n");
+    if (!chatSelections.current(ticket)) return;
+    chatSelections.state(ticket.windowId).key = selectedKey;
     const replyToId = pickedId ?? latestMessageNotFromMe(messages, me.emails);
     const subject = messages[messages.length - 1].subject || '';
 
@@ -2059,6 +2104,8 @@ async function openEmailChat(tabId, selectedMessages = null) {
         chat_reply_to_id: replyToId,
         use_diff_viewer: '0',
         chat_mode: true,
+        chat_history_key: historyKey,
+        chat_selection: ticket,
         chat_subject: subject,
         chat_count: messages.length,
         chat_attachments: attachments,
@@ -2070,11 +2117,13 @@ async function openEmailChat(tabId, selectedMessages = null) {
 // (experiments/chatPanel) instead of a popup window. Windows that can't host
 // the panel (compose, standalone message windows) fall back to the popup.
 
-async function openChatView(win_options, curr_tabId) {
-    const prefs_panel = await browser.storage.sync.get({ chat_in_side_panel: prefs_default.chat_in_side_panel });
+async function openChatView(win_options, curr_tabId, ticket = null) {
+    if (ticket && !chatSelections.current(ticket)) return;
+    const prefs_panel = await getSecureSettings({ chat_in_side_panel: prefs_default.chat_in_side_panel });
     if (prefs_panel.chat_in_side_panel) {
         try {
             const tab = await browser.tabs.get(curr_tabId);
+            if (ticket && !chatSelections.current(ticket)) return;
             if (await browser.chatPanel.open(tab.windowId, win_options.url + '&panel=1')) {
                 return;
             }
@@ -2082,6 +2131,7 @@ async function openChatView(win_options, curr_tabId) {
             taLog.error("[ThunderAI] Side panel unavailable, opening a window instead: " + e);
         }
     }
+    if (ticket && !chatSelections.current(ticket)) return;
     await browser.windows.create(win_options);
 }
 
@@ -2135,7 +2185,7 @@ function doGetSparkFeature(spark_feature_active) {
 }
 
 async function reload_pref_init(){
-    prefs_init = await browser.storage.sync.get(PREFS_INIT_KEYS);
+    prefs_init = await getSecureSettings(PREFS_INIT_KEYS);
     // add_tags must be checked together with add_tags_auto, exactly as newEmailListener
     // does: otherwise every incoming mail wakes the whole pipeline for a no-op. Since the
     // reconciliation turns add_tags off without touching add_tags_auto, that combination
@@ -2207,12 +2257,12 @@ function setupPermissionsRemovedListener() {
         // Process 'tags' permissions removal
         if (["messagesTags", "messagesUpdate"].some(permission => permissions.permissions.includes(permission))) {
             // console.log(">>>>>>>>>>> Permissions onRemoved: tags");
-            browser.storage.sync.set({add_tags: false});
+            setSecureSettings({add_tags: false});
         }
         // Process 'spamfilter' permissions removal
         if (["messagesMove", "messagesUpdate"].some(permission => permissions.permissions.includes(permission))) {
             // console.log(">>>>>>>>>>> Permissions onRemoved: spamfilter");
-            browser.storage.sync.set({spamfilter: false});
+            setSecureSettings({spamfilter: false});
         }
     });
 }
@@ -2379,7 +2429,7 @@ async function processEmails(args) {
     // The separate summarize block below handles the context menu flow.
 
     if (addTagsAuto || spamFilter || summarizeOnReceive || summarizeSendersActive || translateOnReceive || translate) {
-        let prefs_aats = await browser.storage.sync.get({
+        let prefs_aats = await getSecureSettings({
             add_tags_maxnum: prefs_default.add_tags_maxnum,
             connection_type: prefs_default.connection_type,
             add_tags_force_lang: prefs_default.add_tags_force_lang,
@@ -2661,7 +2711,7 @@ async function processEmails(args) {
     }
 
     if (summarize && !taBatchController.isCancelled()) {
-        let summarize_prefs = await browser.storage.sync.get({
+        let summarize_prefs = await getSecureSettings({
             summarize_display_mode: prefs_default.summarize_display_mode,
             summarize_max_messages: prefs_default.summarize_max_messages,
         });

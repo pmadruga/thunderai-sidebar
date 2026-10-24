@@ -1,3 +1,4 @@
+import { getSecureSettings, setSecureSettings, promptStorage } from '../js/secure-settings.js';
 /*
  *  ThunderAI [https://micz.it/thunderbird-addon-thunderai/]
  *  Copyright (C) 2024 - 2026  Mic (m@micz.it)
@@ -24,7 +25,7 @@ let menuSendImmediately = false;
 let taLog = console;
 let tabType;
 document.addEventListener('DOMContentLoaded', async () => {
-    let prefs = await browser.storage.sync.get({
+    let prefs = await getSecureSettings({
       do_debug: prefs_default.do_debug,
       dynamic_menu_force_enter: prefs_default.dynamic_menu_force_enter,
       connection_type: prefs_default.connection_type,

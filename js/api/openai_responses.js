@@ -18,6 +18,9 @@
 
 // Some original methods derived from https://github.com/ali-raheem/Aify/blob/4ece286095ea7a6cf89d696902e6b81b5d1c3a4b/plugin/html/API.js
 
+import { redactApiError } from './api-utils.js';
+import { secureFetch } from '../endpoint-policy.js';
+
 import { parseExtraBody } from './api-utils.js';
 
 
@@ -56,10 +59,11 @@ export class OpenAI {
   }
 
 
-  fetchModels = async () => {
+  fetchModels = async (signal) => {
     try{
-      const response = await fetch("https://api.openai.com/v1/models", {
+      const response = await secureFetch("https://api.openai.com/v1/models", {
           method: "GET",
+          signal,
           headers: {
               "Content-Type": "application/json",
               Authorization: "Bearer "+ this.apiKey
@@ -69,10 +73,10 @@ export class OpenAI {
       if (!response.ok) {
           const errorDetail = await response.text();
           let err_msg = "[ThunderAI] OpenAI API request failed: " + response.status + " " + response.statusText + ", Detail: " + errorDetail;
-          console.error(err_msg);
+          console.error("[ThunderAI] Provider rejected the models request");
           let output = {};
           output.ok = false;
-          output.error = errorDetail;
+          output.error = redactApiError(errorDetail, this.apiKey);
           return output;
       }
 
@@ -83,16 +87,17 @@ export class OpenAI {
 
       return output;
     }catch (error) {
-      console.error("[ThunderAI] OpenAI API request failed: " + error);
+        if (error?.name === 'AbortError') throw error;
+      console.error("[ThunderAI] OpenAI API request failed: ");
       let output = {};
       output.is_exception = true;
       output.ok = false;
-      output.error = "OpenAI API request failed: " + error;
+      output.error = "OpenAI API request failed: " + redactApiError(error, this.apiKey);
       return output;
     }
   }
 
-  fetchResponse = async (messages, maxTokens = 0, previous_response_id = null) => {
+  fetchResponse = async (messages, maxTokens = 0, previous_response_id = null, { signal } = {}) => {
 
     const input = messages.map(msg => ({
       role: msg.role,
@@ -131,8 +136,9 @@ export class OpenAI {
     // console.log(">>>>>>>>>>> OpenAI API request: " + JSON.stringify(messages));
 
     try {
-      const response = await fetch("https://api.openai.com/v1/responses", {
+      const response = await secureFetch("https://api.openai.com/v1/responses", {
           method: "POST",
+            signal,
           headers: { 
               "Content-Type": "application/json", 
               Authorization: "Bearer "+ this.apiKey
@@ -141,11 +147,12 @@ export class OpenAI {
       });
       return response;
     }catch (error) {
-        console.error("[ThunderAI] OpenAI Responses API request failed: " + error);
+        if (error?.name === 'AbortError') throw error;
+        console.error("[ThunderAI] OpenAI Responses API request failed: ");
         let output = {};
         output.is_exception = true;
         output.ok = false;
-        output.error = "OpenAI Responses API request failed: " + error;
+        output.error = "OpenAI Responses API request failed: " + redactApiError(error, this.apiKey);
         return output;
     }
   }
