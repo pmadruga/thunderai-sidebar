@@ -41,9 +41,11 @@ Detailed subsystem specifications remain in [claude-spec/](../claude-spec/). Add
 Build a development XPI, install `marionette_driver` in a development Python environment, then run:
 
 ```sh
-python tests/thunderbird/sidebar-smoke.py --flatpak \
-  --xpi dist/thunderai-side-panel-5.1.0.xpi \
-  --screenshots docs/screenshots
+for theme in light dark; do
+  python tests/thunderbird/sidebar-smoke.py --flatpak \
+    --xpi dist/thunderai-side-panel-5.1.0.xpi \
+    --screenshots docs/screenshots --theme "$theme"
+done
 ```
 
-For a native installation, replace `--flatpak` with `--binary /path/to/thunderbird`. Screenshot mode uses a short fictional email and fixed responses from a local mock provider. Normal mode retains the large-email regression. Both modes exercise real sidebar rendering, encrypted restoration, continuation and deletion. No personal account or profile is used.
+For a native installation, replace `--flatpak` with `--binary /path/to/thunderbird`. Screenshot mode uses a fictional local inbox, a short email and fixed responses from a local mock provider. It enables the selected built-in Thunderbird theme, captures the full mail window and sidebar, then clicks “Use this answer” and captures the resulting unsent compose draft. Normal mode retains the large-email regression. Both modes exercise real sidebar rendering, encrypted restoration, continuation and deletion. No personal account or profile is used.

@@ -9,10 +9,39 @@ await ExtensionPermissions.add(e.id,{permissions:[],origins:['http://127.0.0.1/*
 await v.apiCan.findAPIPath('storage.sync.set')({connection_type:'openai_comp_api',openai_comp_host:arguments[2],openai_comp_model:'demo-local-model',openai_comp_chat_name:'Local demo',openai_comp_use_v1:true,openai_comp_api_key:'',max_prompt_length:1});
 const {MailServices}=ChromeUtils.importESModule('resource:///modules/MailServices.sys.mjs');
 try {MailServices.accounts.localFoldersServer;} catch(_){MailServices.accounts.createLocalMailAccount();}
-const folder=MailServices.accounts.localFoldersServer.rootFolder.getChildNamed('Trash');
 const demo = arguments[3];
+const root = MailServices.accounts.localFoldersServer.rootFolder;
+let folder = root.getChildNamed('Trash');
+if (demo) {
+  const {BuiltInThemes} = ChromeUtils.importESModule('resource:///modules/BuiltInThemes.sys.mjs');
+  await BuiltInThemes.ensureBuiltInThemes();
+  await (await AddonManager.getAddonByID('thunderbird-compact-' + arguments[4] + '@mozilla.org')).enable();
+  const account = MailServices.accounts.findAccountForServer(MailServices.accounts.localFoldersServer);
+  const identity = MailServices.accounts.createIdentity();
+  identity.fullName = 'Alex Morgan'; identity.email = 'alex@example.invalid'; identity.composeHtml = true;
+  account.addIdentity(identity); account.defaultIdentity = identity;
+  folder = root.QueryInterface(Ci.nsIMsgLocalMailFolder).createLocalSubfolder('Demo inbox');
+  for (const [i, subject] of ['Design review notes', 'Wednesday team check-in', 'Homepage copy ready for review'].entries()) {
+    folder.QueryInterface(Ci.nsIMsgLocalMailFolder).addMessage(`From: Maya Chen <maya@example.invalid>\r\nTo: Alex Morgan <alex@example.invalid>\r\nSubject: ${subject}\r\nMessage-ID: <demo-${i}@example.invalid>\r\nDate: Fri, 23 Oct 2026 10:00:00 +0000\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nA fictional message for the screenshot demonstration.\r\n`);
+  }
+}
+
 const hdr=folder.QueryInterface(Ci.nsIMsgLocalMailFolder).addMessage((demo ? 'From: Maya Chen <maya@example.invalid>\r\nTo: Alex Morgan <alex@example.invalid>\r\nSubject: Website launch: next steps\r\n' : 'From: synthetic@example.invalid\r\nTo: test@example.invalid\r\nSubject: Sidebar synthetic test\r\n') + 'Message-ID: <sidebar-test@example.invalid>\r\nDate: Sat, 24 Oct 2026 12:00:00 +0000\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n'+(demo ? 'Hi Alex,\r\n\r\nWe are aiming to launch the website on Thursday. I will approve the homepage copy by Tuesday. Could you check the mobile layout and contact form before our Wednesday review?\r\n\r\nWe still need someone to monitor the contact inbox after launch. Let us decide that in the review.\r\n\r\nThanks,\r\nMaya\r\n' : 'Synthetic mail context content. '.repeat(4000))+'\r\n');
-const converted=e.messageManager.convert(hdr);const tab=await v.apiCan.findAPIPath('messageDisplay.open')({messageId:converted.id,location:'tab'});
+const converted=e.messageManager.convert(hdr);
+let tab;
+if (demo) {
+  const win = Services.wm.getMostRecentWindow('mail:3pane');
+  win.gTabmail.switchToTab(0);
+  const pane = win.gTabmail.currentAbout3Pane;
+  pane.displayFolder(folder);
+  await new Promise(resolve => win.setTimeout(resolve, 700));
+  pane.selectMessage(hdr);
+  await new Promise(resolve => win.setTimeout(resolve, 300));
+  tab = e.tabManager.convert(win.gTabmail.currentTabInfo);
+} else {
+  tab=await v.apiCan.findAPIPath('messageDisplay.open')({messageId:converted.id,location:'tab'});
+}
+
 await v.apiCan.findAPIPath('chatPanel.open')(tab.windowId,e.baseURI.spec+'api_webchat/index.html?llm=openai_comp_api&panel=1&call_id=synthetic&prompt_name=Test');
 return {tabId:tab.id};
 })().then(done,e=>done({error:String(e)}));

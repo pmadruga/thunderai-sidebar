@@ -23,6 +23,7 @@ def main():
     parser.add_argument('--port', type=int, default=2836)
     parser.add_argument('--http-port', type=int, default=18770)
     parser.add_argument('--screenshots', type=Path, help='Save README screenshots using synthetic demo mail')
+    parser.add_argument('--theme', choices=['light', 'dark'], default='light', help='Thunderbird theme for screenshots')
     args = parser.parse_args()
     question = 'What are the next steps for the website launch?' if args.screenshots else 'Synthetic private question æøå'
     answer = ('Here are the next steps from the email:\n\n'
@@ -69,7 +70,7 @@ def main():
             client=Marionette(host='127.0.0.1',port=args.port); client.raise_for_port(timeout=45); client.start_session(); client.set_context('chrome'); client.timeout.script=30
             client.set_window_rect(width=1500, height=1000)
             setup_script = (Path(__file__).parent / 'fixtures' / 'sidebar-setup.js').read_text()
-            setup=client.execute_async_script(setup_script,script_args=[str(local_xpi),EXTENSION_ID,f'http://127.0.0.1:{args.http_port}',bool(args.screenshots)])
+            setup=client.execute_async_script(setup_script,script_args=[str(local_xpi),EXTENSION_ID,f'http://127.0.0.1:{args.http_port}',bool(args.screenshots),args.theme])
             assert 'error' not in setup, setup
             wrapper="""const done=arguments[arguments.length-1];const b=Services.wm.getMostRecentWindow('mail:3pane').document.querySelector('#thunderai-chat-panel browser');b.browsingContext.currentWindowGlobal.getActor('MarionetteCommands').executeScript(arguments[0],[],{sandboxName:'default',newSandbox:true,timeout:20000}).then(done,e=>done({error:String(e)}));"""
             def js(code):
@@ -93,6 +94,7 @@ def main():
             def send(text):
                 js("const s=document.querySelector('message-input').shadowRoot;const f=s.querySelector('#messageInputField');f.value="+json.dumps(text)+";f.dispatchEvent(new Event('input',{bubbles:true}));s.querySelector('#sendButton').click();return true;")
             open_chat()
+            wait(lambda:js("return !!document.querySelector('message-input').wrappedJSObject._pendingContext;"), 'email context ready')
             send(question)
             wait(lambda:answer.split('\n')[0] in content(),'first streaming response')
             wait(lambda:len(requests)==1,'first model request')
@@ -106,8 +108,9 @@ def main():
                 time.sleep(4)
                 args.screenshots.mkdir(parents=True, exist_ok=True)
                 element = client.find_element('css selector', '#thunderai-chat-panel') if panel_only else None
-                (args.screenshots / name).write_bytes(client.screenshot(element=element, format='binary'))
-            screenshot('email-chat.png')
+                (args.screenshots / (Path(name).stem + '-' + args.theme + '.png')).write_bytes(client.screenshot(element=element, format='binary'))
+            screenshot('main-window.png')
+            screenshot('sidebar.png', panel_only=True)
             records=js("return window.wrappedJSObject.browser.storage.local.get(null).then(d=>Object.fromEntries(Object.entries(d).filter(([k])=>k.startsWith('email_chat_'))));")
             assert any(v.get('encryption')=='oskeystore-v2' for v in records.values() if isinstance(v,dict)), 'encrypted v2 root absent'
             assert question not in json.dumps(records) and 'Synthetic mail context' not in json.dumps(records), 'plaintext history persisted'
@@ -120,6 +123,24 @@ def main():
             wait(lambda:followup.split('\n')[0] in content() and (args.screenshots or content().count(answer)>=2),'continued response')
             time.sleep(.5)
             screenshot('draft-reply.png', panel_only=True)
+            if args.screenshots:
+                main_handle = client.current_chrome_window_handle
+                js("const buttons=document.querySelector('messages-area').shadowRoot.querySelectorAll('split-button');buttons[buttons.length-1].shadowRoot.querySelector('button.action_btn').click();return true;")
+                wait(lambda:client.execute_script("return !!Services.wm.getMostRecentWindow('msgcompose')?.gMsgCompose;"), 'compose window opened from sidebar')
+                for handle in client.chrome_window_handles:
+                    client.switch_to_window(handle)
+                    client.set_context('chrome')
+                    if client.execute_script("return document.documentElement.getAttribute('windowtype')==='msgcompose';"):
+                        break
+                else:
+                    raise AssertionError('Compose window handle unavailable')
+                client.set_context('chrome')
+                client.set_window_rect(width=1250, height=900)
+                wait(lambda:client.execute_script("return document.querySelector('#messageEditor')?.contentDocument?.body?.textContent.includes('I’ll test the mobile layout');"), 'draft inserted by Use this answer')
+                screenshot('compose.png')
+                # Leave the unsent draft in this disposable profile; no message is sent.
+                client.switch_to_window(main_handle)
+                client.set_context('chrome')
             # Exercise the clear button handler, accepting its confirmation in this test page.
             js("window.wrappedJSObject.confirm=()=>true;document.querySelector('#clearEmailChat').click();return true;")
             wait(lambda:question not in content(),'clear chat UI')

@@ -4,9 +4,18 @@ Chat about an email conversation without leaving Thunderbird. Summarize the thre
 
 An independent fork of [ThunderAI by Mic](https://github.com/micz/ThunderAI), maintained by [Pedro Madruga](https://github.com/pmadruga). Upstream history and attribution are preserved under GPL-3.0-or-later. This is not an official ThunderAI release.
 
-![Thunderbird showing a fictional website-launch email with its summary in the chat sidebar](docs/screenshots/email-chat.png)
+## Screenshots
 
-*Actual Thunderbird interface with fictional email and a local mock provider. No personal mail is shown.*
+Real Thunderbird windows in both built-in themes. All email, identities and AI responses are fictional, using a local mock provider. Select an image to view it at full size.
+
+| View | Light mode | Dark mode |
+| --- | --- | --- |
+| **Main Thunderbird window**: folders, message list, reading pane and chat | [![Main Thunderbird window in light mode](docs/screenshots/main-window-light.png)](docs/screenshots/main-window-light.png) | [![Main Thunderbird window in dark mode](docs/screenshots/main-window-dark.png)](docs/screenshots/main-window-dark.png) |
+| **Chat sidebar**: summarize the selected email | [![Email summary in the light sidebar](docs/screenshots/sidebar-light.png)](docs/screenshots/sidebar-light.png) | [![Email summary in the dark sidebar](docs/screenshots/sidebar-dark.png)](docs/screenshots/sidebar-dark.png) |
+| **Follow-up draft**: continue a restored conversation | [![Reply draft in the light sidebar](docs/screenshots/draft-reply-light.png)](docs/screenshots/draft-reply-light.png) | [![Reply draft in the dark sidebar](docs/screenshots/draft-reply-dark.png)](docs/screenshots/draft-reply-dark.png) |
+| **Compose a reply**: the sidebar's “Use this answer” opens an editable draft | [![Unsent reply in Thunderbird's light compose window](docs/screenshots/compose-light.png)](docs/screenshots/compose-light.png) | [![Unsent reply in Thunderbird's dark compose window](docs/screenshots/compose-dark.png)](docs/screenshots/compose-dark.png) |
+
+The sidebar docks in the main mail window. Composing uses Thunderbird's separate compose window; the draft shown above was inserted by the sidebar, and no message was sent.
 
 ## Features
 
@@ -16,15 +25,6 @@ An independent fork of [ThunderAI by Mic](https://github.com/micz/ThunderAI), ma
 - **Resume a conversation:** encrypted local history is separated by account, thread and provider endpoint.
 - **Control retention:** clear one conversation or all history, with default limits of 90 days and 50 MiB.
 - **Keep upstream actions:** proofreading, translation, summaries and other ThunderAI email tools remain available.
-
-<details>
-<summary>See a follow-up reply draft</summary>
-
-<p><img src="docs/screenshots/draft-reply.png" width="420" alt="A follow-up question and draft reply in the Thunderbird sidebar, with the Use this answer button" /></p>
-
-The demo reopens the saved conversation before asking for this reply. Email and responses are synthetic.
-
-</details>
 
 ## Install
 
